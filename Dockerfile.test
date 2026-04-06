@@ -1,0 +1,16 @@
+FROM emscripten/emsdk:4.0.23
+
+WORKDIR /xash3d-fwgs
+
+# Copy the source code (Docker build context is xash3d-fwgs/)
+COPY . .
+
+# Set SDL2 flags for emscripten
+ENV EMCC_CFLAGS="-s USE_SDL=2"
+ENV EMCC_LDFLAGS="-s USE_SDL=2"
+
+# Configure for emscripten
+RUN ./waf configure --emscripten
+
+# Build (verification only - no install)
+RUN ./waf build

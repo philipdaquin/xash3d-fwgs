@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  build-wasm:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    image: xash3d-fwgs-wasm:latest
+    container_name: xash3d-wasm-test
+
+  # Alternative: build and mount output for debugging
+  # build-debug:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.test
+  #   image: xash3d-fwgs-wasm:latest
+  #   container_name: xash3d-wasm-debug
+  #   volumes:
+  #     - ./build:/xash3d-fwgs/build:ro
+  #   command: ["ls", "-la", "/xash3d-fwgs/build"]
