@@ -103,6 +103,7 @@ typedef struct gameinfo_s
 	qboolean	noskills;		// disable skill menu selection
 	qboolean	render_picbutton_text; // use font renderer to render WON buttons
 	qboolean	internal_vgui_support; // skip loading VGUI, pass ingame UI support API to client
+	qboolean	vgui2; // enable VGUI2 bootstrap for VGUI2-capable clients
 
 	char		sp_entity[32];	// e.g. info_player_start
 	char		mp_entity[32];	// e.g. info_player_deathmatch

@@ -720,6 +720,7 @@ static qboolean FS_WriteGameInfo( const char *filepath, const gameinfo_t *GameIn
 
 	// always expose our extensions :)
 	FS_Printf( f, "internal_vgui_support\t\t%i\n", GameInfo->internal_vgui_support );
+	FS_Printf( f, "vgui2\t\t%i\n", GameInfo->vgui2 );
 	FS_Printf( f, "render_picbutton_text\t\t%i\n", GameInfo->render_picbutton_text );
 
 	if( COM_CheckStringEmpty( GameInfo->demomap ))
@@ -1002,6 +1003,11 @@ static void FS_ParseGenericGameInfo( gameinfo_t *GameInfo, const char *buf, cons
 			{
 				pfile = COM_ParseFile( pfile, token, sizeof( token ));
 				GameInfo->internal_vgui_support = Q_atoi( token ) ? true : false;
+			}
+			else if( !Q_stricmp( token, "vgui2" ))
+			{
+				pfile = COM_ParseFile( pfile, token, sizeof( token ));
+				GameInfo->vgui2 = Q_atoi( token ) ? true : false;
 			}
 			else if( !Q_stricmp( token, "quicksave_aged_count" ))
 			{

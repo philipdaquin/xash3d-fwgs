@@ -18,6 +18,7 @@ GNU General Public License for more details.
 #include "const.h"
 #include "entity_types.h"
 #include "vgui_draw.h"
+#include "vgui2/vgui2_host.h"
 #include "sound.h"
 #include "input.h" // touch
 #include "platform/platform.h" // GL_UpdateSwapInterval
@@ -516,6 +517,8 @@ void V_PostRender( void )
 		SCR_TileClear();
 		CL_DrawHUD( CL_ACTIVE );
 		VGui_Paint();
+		if( VGui2_IsInitialized())
+			VGui2_Frame();
 	}
 
 	switch( cls.scrshot_action )
