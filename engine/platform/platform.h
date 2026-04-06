@@ -318,9 +318,13 @@ typedef enum
 } rserr_t;
 
 struct vidmode_s;
+#ifdef __cplusplus
+#include "ref_api.h"
+#else
 typedef enum window_mode_e window_mode_t;
 typedef enum ref_window_type_e ref_window_type_t;
 typedef enum ref_graphic_apis_e ref_graphic_apis_t;
+#endif
 
 // Window
 qboolean  R_Init_Video( ref_graphic_apis_t type );
