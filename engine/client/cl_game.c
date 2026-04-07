@@ -3997,12 +3997,9 @@ qboolean CL_LoadProgs( const char *name )
 	// NOTE: important stuff!
 	// vgui must startup BEFORE loading client.dll to avoid get error ERROR_NOACESS during LoadLibrary
 
-	// VGUI2 bootstrap for VGUI2-capable clients
-	if( GI->vgui2 )
-	{
-		VGui2_Init();
-		Con_Reportf( "VGUI2: VGUI2 bootstrap enabled (vgui2=1)\n" );
-	}
+	// VGUI2 bootstrap - always initialize (gameinfo vgui2 flag no longer required)
+	VGui2_Init();
+	Con_Reportf( "VGUI2: VGUI2 bootstrap initialized\n" );
 
 	if( !try_internal_vgui_support && VGui_LoadProgs( NULL ))
 		VGui_Startup( refState.width, refState.height );
