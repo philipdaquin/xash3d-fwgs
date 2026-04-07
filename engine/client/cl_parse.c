@@ -1783,6 +1783,7 @@ void CL_RegisterResources( sizebuf_t *msg, connprotocol_t proto )
 		if( !cl.video_prepped && !cl.audio_prepped )
 		{
 			Con_Printf( "Setting up renderer...\n" );
+			Con_Printf( "Hello testing this is from another code...\n" );
 
 			// load tempent sprites (glowshell, muzzleflashes etc)
 			CL_LoadClientSprites ();

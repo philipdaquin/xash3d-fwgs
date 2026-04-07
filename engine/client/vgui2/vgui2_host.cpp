@@ -21,8 +21,8 @@ static vgui2::VPANEL s_rootPanel = 0;
 static vgui2::VPANEL s_testPanel = 0;
 static qboolean s_testPanelCreated = false;
 
-// Test injection cvar
-CVAR_CREATE( vgui2_test, "1", FCVAR_ARCHIVE, "enable VGUI2 rendering test (rect + text)" );
+// Test injection cvar - registered once at init, pointer stored for runtime checks
+static convar_t *vgui2_test = NULL;
 
 static void *VGui2_CreateInterface( const char *pName, int *pReturnCode )
 {
@@ -46,6 +46,9 @@ void VGui2_Init( void )
         return;
 
     g_VGui2Interfaces.Init();
+
+    // Register test cvar
+    vgui2_test = Cvar_Get( "vgui2_test", "1", FCVAR_ARCHIVE, "enable VGUI2 rendering test (rect + text)" );
 
     // Get interfaces for root panel creation
     vgui2::IVGui *ivgui = g_VGui2Interfaces.GetIVGui();
@@ -120,13 +123,12 @@ void VGui2_Shutdown( void )
 
 void VGui2_Frame( void )
 {
-    Con_Reportf("VGUI2: VGui2_Frame() called\n");
-    Con_Reportf("VGUI2: cls.state=%d (ca_active=%d), cls.signon=%d (SIGNONS=%d)\n", 
-        cls.state, ca_active, cls.signon, SIGNONS);
-    
+    // DEBUG: Con_Printf with S_NOTE to match engine startup text visibility
+    Con_Printf( S_NOTE "VGUI2 FRAME ENTERED\n" );
+
     if( !g_iVGui2Initialized )
     {
-        Con_Reportf("VGUI2: Not initialized, returning\n");
+        Con_Printf( S_NOTE "VGUI2: Not initialized, returning\n" );
         return;
     }
 
@@ -141,7 +143,15 @@ void VGui2_Frame( void )
     if( !ipanel || !isurface )
         return;
 
-    // Create test panel once (on first frame)
+    // DEBUG: Confirm we're in the right frame
+    Con_Printf( S_NOTE "VGUI2: frame running, rootPanel=%d\n", (int)s_rootPanel );
+
+    // =============================================================
+    // DEBUG PASS: Direct unclipped rectangle draw
+    // Purpose: Test if ref.dllFuncs.FillRGBA works without panel traversal
+    // =============================================================
+
+    // Create test panel once (on first frame) - skip if already created
     if( !s_testPanelCreated && s_rootPanel != 0 )
     {
         s_testPanel = ivgui->AllocPanel();
@@ -153,49 +163,56 @@ void VGui2_Frame( void )
             ipanel->SetVisible( s_testPanel, true );
             ipanel->SetParent( s_testPanel, s_rootPanel );
             s_testPanelCreated = true;
-            Con_Reportf( "VGUI2: Created test panel=%d\n", (int)s_testPanel );
+            Con_Printf( S_NOTE "VGUI2: Created test panel=%d\n", (int)s_testPanel );
         }
     }
 
-    // 2. SolveTraverse then PaintTraverse in correct order
-    if( s_rootPanel != 0 )
+    // Bypass panel traversal entirely - draw DIRECTLY with FillRGBA
+    // Large bright red rectangle at (50, 50) size 500x300
+    Con_Printf( S_NOTE "VGUI2: about to draw unclipped rect\n" );
+
+    // TEMPORARY DEBUG: Direct FillRGBA call with NO clipping/scissor
+    // Using bright red (255,0,0) at a visible screen position
+    // Coordinates: x=50, y=50, w=500, h=300 - should be unmistakable
+    ref.dllFuncs.FillRGBA( kRenderTransTexture, 50.0f, 50.0f, 500.0f, 300.0f, 255, 0, 0, 255 );
+
+    Con_Printf( S_NOTE "VGUI2: unclipped rect draw returned\n" );
+
+    // =============================================================
+    // END DEBUG PASS
+    // =============================================================
+
+    // 2. Panel traversal (normal VGUI2 path) - commented out for debug
+    /*
+    if( s_rootPanel == 0 )
     {
-        // Solve absolute positions FIRST
-        isurface->SolveTraverse( s_rootPanel, false );
-        
-        // THEN paint
-        isurface->PaintTraverse( s_rootPanel );
-    }
-
-    // 3. Direct test injection (red) - only if vgui2_test is enabled
-    // Offset to right of green traversal rect so both are visible
-    Con_Reportf("VGUI2: vgui2_test=%p, value=%.1f, s_rootPanel=%d, s_testPanel=%d\n",
-        vgui2_test, vgui2_test ? vgui2_test->value : -1, s_rootPanel, s_testPanel);
-    
-    if( vgui2_test && vgui2_test->value && s_testPanel != 0 )
-    {
-        Con_Reportf("VGUI2: ENTERING test draw block - will draw red rect at (320,100)\n");
-        // Draw a visible test rectangle (red) - offset X by 220 to not overlap green
-        isurface->DrawSetColor( 255, 0, 0, 255 );
-        isurface->DrawFilledRect( 320, 100, 520, 200 );
-        Con_Reportf("VGUI2: Drew red rect at (320,100) size 200x100\n");
-
-        // Draw test text "VGUI2 OK" (direct)
-        isurface->DrawSetTextColor( 255, 255, 255, 255 );
-        isurface->DrawSetTextPos( 330, 110 );
-        
-        wchar_t testText[] = L"VGUI2 OK";
-        isurface->DrawPrintText( testText, wcslen( testText ) );
-
-        // Draw second text line lower
-        isurface->DrawSetTextPos( 330, 130 );
-        wchar_t testText2[] = L"RECTANGLE";
-        isurface->DrawPrintText( testText2, wcslen( testText2 ) );
+        Con_Printf( S_NOTE "VGUI2: ABORT - s_rootPanel is 0!\n" );
     }
     else
     {
-        Con_Reportf("VGUI2: Skipping test draw block (vgui2_test=%p value=%.1f s_testPanel=%d)\n",
-            vgui2_test, vgui2_test ? vgui2_test->value : -1, s_testPanel);
+        // Solve absolute positions FIRST
+        isurface->SolveTraverse( s_rootPanel, false );
+
+        // THEN paint
+        isurface->PaintTraverse( s_rootPanel );
+    }
+    */
+
+    // 3. Test injection (red rect via surface interface) - only if vgui2_test is enabled
+    Con_Printf( S_NOTE "VGUI2: vgui2_test=%p, value=%.1f\n",
+        vgui2_test, vgui2_test ? vgui2_test->value : -1 );
+
+    if( vgui2_test && vgui2_test->value && s_testPanel != 0 )
+    {
+        // This uses the VGUI2 surface interface (not direct FillRGBA)
+        isurface->DrawSetColor( 0, 255, 0, 255 );
+        isurface->DrawFilledRect( 50, 400, 250, 500 ); // green rect below red one
+
+        // Text is stubbed - won't render
+        isurface->DrawSetTextColor( 255, 255, 255, 255 );
+        isurface->DrawSetTextPos( 60, 410 );
+        wchar_t testText[] = L"VGUI2 TEST";
+        isurface->DrawPrintText( testText, wcslen( testText ) );
     }
 }
 

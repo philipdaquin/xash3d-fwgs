@@ -537,9 +537,24 @@ public:
     
     void DrawFilledRect(int x0, int y0, int x1, int y1) override
     {
-        Con_Reportf("VGUI2: DrawFilledRect called (%d,%d) to (%d,%d) color=%d,%d,%d,%d\n", 
+        // Log current clip state at entry
+        Con_Reportf("VGUI2: DrawFilledRect clip_state=(%d,%d,%d,%d) x0=%d y0=%d x1=%d y1=%d color=%d,%d,%d,%d\n", 
+            s_currentClip[0], s_currentClip[1], s_currentClip[2], s_currentClip[3],
             x0, y0, x1, y1, m_color[0], m_color[1], m_color[2], m_color[3]);
         
+        // TEMPORARY BYPASS ALL CLIPPING FOR TESTING
+        // This will draw even if outside clip bounds
+        Con_Reportf("VGUI2: DrawFilledRect UNCIPPED calling FillRGBA at (%.0f,%.0f) size (%.0f,%.0f)\n",
+            (float)x0, (float)y0, (float)(x1 - x0), (float)(y1 - y0));
+        
+        ref.dllFuncs.FillRGBA(kRenderTransTexture, 
+            (float)x0, (float)y0, 
+            (float)(x1 - x0), (float)(y1 - y0),
+            (byte)m_color[0], (byte)m_color[1], (byte)m_color[2], (byte)m_color[3]);
+        return;
+        // END TEMPORARY BYPASS
+        
+        // Original clipped code (disabled for testing):
         int clipX = x0 < s_currentClip[0] ? s_currentClip[0] : x0;
         int clipY = y0 < s_currentClip[1] ? s_currentClip[1] : y0;
         int clipX1 = x1 > s_currentClip[0] + s_currentClip[2] ? s_currentClip[0] + s_currentClip[2] : x1;
@@ -635,6 +650,7 @@ public:
     
     void PaintTraverse(VPANEL panel) override
     {
+        Con_Reportf("VGUI2: CSurfaceReal::PaintTraverse called panel=%d\n", (int)panel);
         PaintTraverse_Recursive(panel);
     }
     
