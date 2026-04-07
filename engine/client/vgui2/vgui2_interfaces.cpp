@@ -902,9 +902,11 @@ static CVGuiStub s_IVGui;
 static CPanelReal s_IPanel;
 static CSurfaceReal s_ISurface;
 static CInputInternalStub s_IInputInternal;
-static CSchemeManagerStub s_ISchemeManager;
+static vgui2::ISchemeManager *s_ISchemeManager = NULL;
 static CLocalizeStub s_ILocalize;
 static CSysStub s_ISystem;
+
+ISchemeManager *GetSchemeManager();
 
 } // namespace vgui2
 
@@ -918,7 +920,7 @@ void CVGui2Interfaces::Init()
     m_pIPanel = &vgui2::s_IPanel;
     m_pISurface = &vgui2::s_ISurface;
     m_pIInputInternal = &vgui2::s_IInputInternal;
-    m_pISchemeManager = &vgui2::s_ISchemeManager;
+    m_pISchemeManager = vgui2::GetSchemeManager();
     m_pILocalize = &vgui2::s_ILocalize;
     m_pISystem = &vgui2::s_ISystem;
     

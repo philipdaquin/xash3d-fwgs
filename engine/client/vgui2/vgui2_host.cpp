@@ -14,6 +14,11 @@ int g_iVGui2Initialized = 0;
 
 static CVGui2Interfaces g_VGui2Interfaces;
 
+struct CVGui2Interfaces *VGui2_GetInterfacesClient(void)
+{
+    return &g_VGui2Interfaces;
+}
+
 // Root embedded panel
 static vgui2::VPANEL s_rootPanel = 0;
 
