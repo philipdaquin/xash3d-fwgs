@@ -710,8 +710,17 @@ private:
         if (!IsPanelVisible(panel))
             return;
         
+        // Debug log for test panel traversal
+        if (p->size[0] == 200 && p->size[1] == 100 && p->pos[0] == 100 && p->pos[1] == 100)
+        {
+            Con_Reportf("VGUI2: PaintTraverse painting test panel id=%d at (%d,%d) size=%dx%d\n", 
+                (int)panel, p->absPos[0], p->absPos[1], p->size[0], p->size[1]);
+        }
+        
         PushMakeCurrent(panel, true);
         
+        // Draw panel rect in GREEN to distinguish from direct injection (red)
+        DrawSetColor( 0, 255, 0, 255 );
         DrawFilledRect(p->absPos[0], p->absPos[1], 
                        p->absPos[0] + p->size[0], 
                        p->absPos[1] + p->size[1]);

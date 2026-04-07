@@ -21,6 +21,9 @@ static vgui2::VPANEL s_rootPanel = 0;
 static vgui2::VPANEL s_testPanel = 0;
 static qboolean s_testPanelCreated = false;
 
+// Test injection cvar
+static convar_t *vgui2_test = NULL;
+
 static void *VGui2_CreateInterface( const char *pName, int *pReturnCode )
 {
     if( pReturnCode )
@@ -41,6 +44,9 @@ void VGui2_Init( void )
 {
     if( g_iVGui2Initialized )
         return;
+
+    // Register test cvar
+    vgui2_test = Cvar_Get( "vgui2_test", "1", FCVAR_ARCHIVE, "enable VGUI2 rendering test (rect + text)" );
 
     g_VGui2Interfaces.Init();
 
@@ -157,22 +163,23 @@ void VGui2_Frame( void )
         isurface->PaintTraverse( s_rootPanel );
     }
 
-    // 3. Test injection: force visible rectangle + text proof
-    if( s_testPanel != 0 )
+    // 3. Direct test injection (red) - only if vgui2_test is enabled
+    // Offset to right of green traversal rect so both are visible
+    if( vgui2_test && vgui2_test->value && s_testPanel != 0 )
     {
-        // Draw a visible test rectangle (red)
+        // Draw a visible test rectangle (red) - offset X by 220 to not overlap green
         isurface->DrawSetColor( 255, 0, 0, 255 );
-        isurface->DrawFilledRect( 100, 100, 300, 200 );
+        isurface->DrawFilledRect( 320, 100, 520, 200 );
 
-        // Draw test text "VGUI2 OK"
+        // Draw test text "VGUI2 OK" (direct)
         isurface->DrawSetTextColor( 255, 255, 255, 255 );
-        isurface->DrawSetTextPos( 110, 110 );
+        isurface->DrawSetTextPos( 330, 110 );
         
         wchar_t testText[] = L"VGUI2 OK";
         isurface->DrawPrintText( testText, wcslen( testText ) );
 
         // Draw second text line lower
-        isurface->DrawSetTextPos( 110, 130 );
+        isurface->DrawSetTextPos( 330, 130 );
         wchar_t testText2[] = L"RECTANGLE";
         isurface->DrawPrintText( testText2, wcslen( testText2 ) );
     }
