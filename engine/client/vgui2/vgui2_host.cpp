@@ -123,8 +123,15 @@ void VGui2_Shutdown( void )
 
 void VGui2_Frame( void )
 {
+    Con_Reportf("VGUI2: VGui2_Frame() called\n");
+    Con_Reportf("VGUI2: cls.state=%d (ca_active=%d), cls.signon=%d (SIGNONS=%d)\n", 
+        cls.state, ca_active, cls.signon, SIGNONS);
+    
     if( !g_iVGui2Initialized )
+    {
+        Con_Reportf("VGUI2: Not initialized, returning\n");
         return;
+    }
 
     // 1. RunFrame - processes deletion queue
     vgui2::IVGui *ivgui = g_VGui2Interfaces.GetIVGui();
@@ -165,11 +172,16 @@ void VGui2_Frame( void )
 
     // 3. Direct test injection (red) - only if vgui2_test is enabled
     // Offset to right of green traversal rect so both are visible
+    Con_Reportf("VGUI2: vgui2_test=%p, value=%.1f, s_rootPanel=%d, s_testPanel=%d\n",
+        vgui2_test, vgui2_test ? vgui2_test->value : -1, s_rootPanel, s_testPanel);
+    
     if( vgui2_test && vgui2_test->value && s_testPanel != 0 )
     {
+        Con_Reportf("VGUI2: ENTERING test draw block - will draw red rect at (320,100)\n");
         // Draw a visible test rectangle (red) - offset X by 220 to not overlap green
         isurface->DrawSetColor( 255, 0, 0, 255 );
         isurface->DrawFilledRect( 320, 100, 520, 200 );
+        Con_Reportf("VGUI2: Drew red rect at (320,100) size 200x100\n");
 
         // Draw test text "VGUI2 OK" (direct)
         isurface->DrawSetTextColor( 255, 255, 255, 255 );
@@ -182,6 +194,11 @@ void VGui2_Frame( void )
         isurface->DrawSetTextPos( 330, 130 );
         wchar_t testText2[] = L"RECTANGLE";
         isurface->DrawPrintText( testText2, wcslen( testText2 ) );
+    }
+    else
+    {
+        Con_Reportf("VGUI2: Skipping test draw block (vgui2_test=%p value=%.1f s_testPanel=%d)\n",
+            vgui2_test, vgui2_test ? vgui2_test->value : -1, s_testPanel);
     }
 }
 

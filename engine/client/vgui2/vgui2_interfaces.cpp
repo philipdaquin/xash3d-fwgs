@@ -537,13 +537,23 @@ public:
     
     void DrawFilledRect(int x0, int y0, int x1, int y1) override
     {
+        Con_Reportf("VGUI2: DrawFilledRect called (%d,%d) to (%d,%d) color=%d,%d,%d,%d\n", 
+            x0, y0, x1, y1, m_color[0], m_color[1], m_color[2], m_color[3]);
+        
         int clipX = x0 < s_currentClip[0] ? s_currentClip[0] : x0;
         int clipY = y0 < s_currentClip[1] ? s_currentClip[1] : y0;
         int clipX1 = x1 > s_currentClip[0] + s_currentClip[2] ? s_currentClip[0] + s_currentClip[2] : x1;
         int clipY1 = y1 > s_currentClip[1] + s_currentClip[3] ? s_currentClip[1] + s_currentClip[3] : y1;
         
         if (clipX >= clipX1 || clipY >= clipY1)
+        {
+            Con_Reportf("VGUI2: DrawFilledRect clipped out! clip=(%d,%d) to (%d,%d)\n", 
+                clipX, clipY, clipX1, clipY1);
             return;
+        }
+        
+        Con_Reportf("VGUI2: DrawFilledRect calling FillRGBA at (%.0f,%.0f) size (%.0f,%.0f)\n",
+            (float)clipX, (float)clipY, (float)(clipX1 - clipX), (float)(clipY1 - clipY));
         
         ref.dllFuncs.FillRGBA(kRenderTransTexture, 
             (float)clipX, (float)clipY, 
@@ -708,12 +718,20 @@ private:
         if (!p) return;
         
         if (!IsPanelVisible(panel))
+        {
+            // Debug log for test panel visibility check
+            if (p->size[0] == 200 && p->size[1] == 100 && p->pos[0] == 100 && p->pos[1] == 100)
+            {
+                Con_Reportf("VGUI2: PaintTraverse SKIPPING test panel id=%d - NOT VISIBLE (visible=%d)\n", 
+                    (int)panel, p->visible);
+            }
             return;
+        }
         
         // Debug log for test panel traversal
         if (p->size[0] == 200 && p->size[1] == 100 && p->pos[0] == 100 && p->pos[1] == 100)
         {
-            Con_Reportf("VGUI2: PaintTraverse painting test panel id=%d at (%d,%d) size=%dx%d\n", 
+            Con_Reportf("VGUI2: PaintTraverse PAINTING test panel id=%d at (%d,%d) size=%dx%d\n", 
                 (int)panel, p->absPos[0], p->absPos[1], p->size[0], p->size[1]);
         }
         
