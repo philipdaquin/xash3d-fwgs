@@ -1,7 +1,7 @@
 /*
  vgui2_host.cpp - VGUI2 host implementation for Xash3D FWGS
  Phase 1: Bootstrap for VGUI2-capable clients
- Phase 2: Real runtime implementation
+ Phase 2: Real runtime implementation with visible rendering proof
  */
 
 #include "vgui2_host.h"
@@ -16,6 +16,10 @@ static CVGui2Interfaces g_VGui2Interfaces;
 
 // Root embedded panel
 static vgui2::VPANEL s_rootPanel = 0;
+
+// Test panel for rendering proof (created once)
+static vgui2::VPANEL s_testPanel = 0;
+static qboolean s_testPanelCreated = false;
 
 static void *VGui2_CreateInterface( const char *pName, int *pReturnCode )
 {
@@ -84,10 +88,19 @@ void VGui2_Shutdown( void )
     if( !g_iVGui2Initialized )
         return;
 
+    vgui2::IVGui *ivgui = g_VGui2Interfaces.GetIVGui();
+
+    // Free test panel
+    if( s_testPanel != 0 && ivgui )
+    {
+        ivgui->MarkPanelForDeletion( s_testPanel );
+        s_testPanel = 0;
+        s_testPanelCreated = false;
+    }
+
     // Free root panel
     if( s_rootPanel != 0 )
     {
-        vgui2::IVGui *ivgui = g_VGui2Interfaces.GetIVGui();
         if( ivgui )
         {
             ivgui->MarkPanelForDeletion( s_rootPanel );
@@ -109,18 +122,59 @@ void VGui2_Frame( void )
 
     // 1. RunFrame - processes deletion queue
     vgui2::IVGui *ivgui = g_VGui2Interfaces.GetIVGui();
+    vgui2::IPanel *ipanel = g_VGui2Interfaces.GetIPanel();
+    vgui2::ISurface *isurface = g_VGui2Interfaces.GetISurface();
+
     if( ivgui )
         ivgui->RunFrame();
 
+    if( !ipanel || !isurface )
+        return;
+
+    // Create test panel once (on first frame)
+    if( !s_testPanelCreated && s_rootPanel != 0 )
+    {
+        s_testPanel = ivgui->AllocPanel();
+        if( s_testPanel != 0 )
+        {
+            ipanel->Init( s_testPanel, NULL );
+            ipanel->SetPos( s_testPanel, 100, 100 );
+            ipanel->SetSize( s_testPanel, 200, 100 );
+            ipanel->SetVisible( s_testPanel, true );
+            ipanel->SetParent( s_testPanel, s_rootPanel );
+            s_testPanelCreated = true;
+            Con_Reportf( "VGUI2: Created test panel=%d\n", (int)s_testPanel );
+        }
+    }
+
     // 2. SolveTraverse then PaintTraverse in correct order
-    vgui2::ISurface *isurface = g_VGui2Interfaces.GetISurface();
-    if( s_rootPanel != 0 && isurface )
+    if( s_rootPanel != 0 )
     {
         // Solve absolute positions FIRST
         isurface->SolveTraverse( s_rootPanel, false );
         
         // THEN paint
         isurface->PaintTraverse( s_rootPanel );
+    }
+
+    // 3. Test injection: force visible rectangle + text proof
+    if( s_testPanel != 0 )
+    {
+        // Draw a visible test rectangle (red)
+        isurface->DrawSetColor( 255, 0, 0, 255 );
+        isurface->DrawFilledRect( 100, 100, 300, 200 );
+
+        // Draw test text "VGUI2 OK"
+        isurface->DrawSetTextColor( 255, 255, 255, 255 );
+        isurface->DrawSetTextPos( 110, 110 );
+        
+        wchar_t testText[] = L"VGUI2 OK";
+        isurface->DrawPrintText( testText, wcslen( testText ) );
+
+        // Draw second text line lower
+        isurface->DrawSetTextPos( 110, 130 );
+        wchar_t testText2[] = L"RECTANGLE";
+        isurface->DrawPrintText( testText2, wcslen( testText2 ) );
     }
 }
 

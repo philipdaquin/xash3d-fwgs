@@ -1,9 +1,11 @@
 /*
- vgui2_interfaces.cpp - VGUI2 stub implementations for Xash3D FWGS
- Phase 1: Bootstrap for VGUI2-capable clients
+ vgui2_interfaces.cpp - VGUI2 implementation for Xash3D FWGS
+ Phase 2: Real runtime implementation with visible rendering
  */
 #include "vgui2_interfaces.h"
 #include "common.h"
+#include "client.h"
+#include "ref_common.h"
 
 #define CONPRINTF(...) Con_Reportf(__VA_ARGS__)
 
@@ -12,7 +14,62 @@
 namespace vgui2
 {
 
-// IVGui stub implementation
+#define MAX_PANELS 256
+#define MAX_CHILDREN 32
+
+struct PanelData_t
+{
+    int pos[2];
+    int size[2];
+    int absPos[2];
+    int insets[4];
+    int zpos;
+    bool visible;
+    bool enabled;
+    bool popup;
+    bool needsSolve;
+    VPANEL parent;
+    VPANEL children[MAX_CHILDREN];
+    int childCount;
+};
+
+static PanelData_t s_panelData[MAX_PANELS];
+static unsigned int s_panelCount = 1;
+static int s_currentClip[4] = { 0, 0, 99999, 99999 };
+static int s_clipStack[32][4];
+static int s_clipStackDepth = 0;
+
+static inline PanelData_t *GetPanelData(VPANEL panel)
+{
+    unsigned int idx = (unsigned int)panel - 1;
+    if (idx >= MAX_PANELS)
+        return NULL;
+    return &s_panelData[idx];
+}
+
+static inline VPANEL CreatePanel()
+{
+    if (s_panelCount >= MAX_PANELS)
+        return INVALID_PANEL;
+    
+    unsigned int idx = s_panelCount++;
+    PanelData_t *p = &s_panelData[idx];
+    
+    memset(p, 0, sizeof(*p));
+    p->pos[0] = p->pos[1] = 0;
+    p->size[0] = p->size[1] = 64;
+    p->absPos[0] = p->absPos[1] = 0;
+    p->visible = true;
+    p->enabled = true;
+    p->needsSolve = true;
+    p->parent = INVALID_PANEL;
+    p->childCount = 0;
+    p->zpos = 0;
+    
+    return (VPANEL)(idx + 1);
+}
+
+// IVGui implementation
 class CVGuiStub : public IVGui
 {
 public:
@@ -126,35 +183,219 @@ public:
     }
 };
 
-// IPanel stub implementation
-class CPanelStub : public IPanel
+// IPanel real implementation
+class CPanelReal : public IPanel
 {
 public:
-    void Init(VPANEL, void *) override {}
-    void SetPos(VPANEL, int, int) override {}
-    void GetPos(VPANEL, int &x, int &y) override { x = 0; y = 0; }
-    void SetSize(VPANEL, int, int) override {}
-    void GetSize(VPANEL, int &wide, int &tall) override { wide = 0; tall = 0; }
+    void Init(VPANEL vguiPanel, void *) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) return;
+        p->pos[0] = p->pos[1] = 0;
+        p->size[0] = p->size[1] = 64;
+        p->visible = true;
+        p->enabled = true;
+        p->needsSolve = true;
+    }
+    
+    void SetPos(VPANEL vguiPanel, int x, int y) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) return;
+        p->pos[0] = x;
+        p->pos[1] = y;
+        p->needsSolve = true;
+    }
+    
+    void GetPos(VPANEL vguiPanel, int &x, int &y) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) { x = y = 0; return; }
+        x = p->pos[0];
+        y = p->pos[1];
+    }
+    
+    void SetSize(VPANEL vguiPanel, int wide, int tall) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) return;
+        p->size[0] = wide;
+        p->size[1] = tall;
+    }
+    
+    void GetSize(VPANEL vguiPanel, int &wide, int &tall) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) { wide = tall = 0; return; }
+        wide = p->size[0];
+        tall = p->size[1];
+    }
+    
     void SetMinimumSize(VPANEL, int, int) override {}
     void GetMinimumSize(VPANEL, int &wide, int &tall) override { wide = 0; tall = 0; }
-    void SetZPos(VPANEL, int) override {}
-    int  GetZPos(VPANEL) override { return 0; }
-    void GetAbsPos(VPANEL, int &x, int &y) override { x = 0; y = 0; }
-    void GetClipRect(VPANEL, int &x0, int &y0, int &x1, int &y1) override { x0 = y0 = x1 = y1 = 0; }
-    void SetInset(VPANEL, int, int, int, int) override {}
-    void GetInset(VPANEL, int &left, int &top, int &right, int &bottom) override { left = top = right = bottom = 0; }
-    void SetVisible(VPANEL, bool) override {}
-    bool IsVisible(VPANEL) override { return false; }
-    void SetParent(VPANEL, VPANEL) override {}
-    int GetChildCount(VPANEL) override { return 0; }
-    VPANEL GetChild(VPANEL, int) override { return INVALID_PANEL; }
-    VPANEL GetParent(VPANEL) override { return INVALID_PANEL; }
+    
+    void SetZPos(VPANEL vguiPanel, int z) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) return;
+        p->zpos = z;
+    }
+    
+    int GetZPos(VPANEL vguiPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) return 0;
+        return p->zpos;
+    }
+    
+    void GetAbsPos(VPANEL vguiPanel, int &x, int &y) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) { x = y = 0; return; }
+        x = p->absPos[0];
+        y = p->absPos[1];
+    }
+    
+    void GetClipRect(VPANEL, int &x0, int &y0, int &x1, int &y1) override
+    {
+        x0 = s_currentClip[0];
+        y0 = s_currentClip[1];
+        x1 = s_currentClip[0] + s_currentClip[2];
+        y1 = s_currentClip[1] + s_currentClip[3];
+    }
+    
+    void SetInset(VPANEL vguiPanel, int left, int top, int right, int bottom) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) return;
+        p->insets[0] = left;
+        p->insets[1] = top;
+        p->insets[2] = right;
+        p->insets[3] = bottom;
+    }
+    
+    void GetInset(VPANEL vguiPanel, int &left, int &top, int &right, int &bottom) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) { left = top = right = bottom = 0; return; }
+        left = p->insets[0];
+        top = p->insets[1];
+        right = p->insets[2];
+        bottom = p->insets[3];
+    }
+    
+    void SetVisible(VPANEL vguiPanel, bool state) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) return;
+        p->visible = state;
+    }
+    
+    bool IsVisible(VPANEL vguiPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) return false;
+        
+        if (!p->visible)
+            return false;
+        
+        if (p->parent != INVALID_PANEL && p->parent != 0)
+            return IsVisible(p->parent);
+        
+        return true;
+    }
+    
+    void SetParent(VPANEL vguiPanel, VPANEL newParent) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        PanelData_t *oldParent = NULL;
+        
+        if (!p) return;
+        
+        if (p->parent != INVALID_PANEL && p->parent != 0)
+        {
+            oldParent = GetPanelData(p->parent);
+            if (oldParent)
+            {
+                for (int i = 0; i < oldParent->childCount; i++)
+                {
+                    if (oldParent->children[i] == vguiPanel)
+                    {
+                        for (int j = i; j < oldParent->childCount - 1; j++)
+                            oldParent->children[j] = oldParent->children[j + 1];
+                        oldParent->childCount--;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        p->parent = newParent;
+        p->needsSolve = true;
+        
+        if (newParent != INVALID_PANEL && newParent != 0)
+        {
+            PanelData_t *newP = GetPanelData(newParent);
+            if (newP && newP->childCount < MAX_CHILDREN)
+            {
+                newP->children[newP->childCount++] = vguiPanel;
+            }
+        }
+    }
+    
+    int GetChildCount(VPANEL vguiPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) return 0;
+        return p->childCount;
+    }
+    
+    VPANEL GetChild(VPANEL vguiPanel, int index) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p || index < 0 || index >= p->childCount) return INVALID_PANEL;
+        return p->children[index];
+    }
+    
+    VPANEL GetParent(VPANEL vguiPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) return INVALID_PANEL;
+        return p->parent;
+    }
+    
     void MoveToFront(VPANEL) override {}
     void MoveToBack(VPANEL) override {}
-    bool HasParent(VPANEL, VPANEL) override { return false; }
-    bool IsPopup(VPANEL) override { return false; }
-    void SetPopup(VPANEL, bool) override {}
-    bool Render_GetPopupVisible( VPANEL ) override { return false; }
+    
+    bool HasParent(VPANEL vguiPanel, VPANEL potentialParent) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) return false;
+        
+        if (p->parent == potentialParent)
+            return true;
+        
+        if (p->parent != INVALID_PANEL && p->parent != 0)
+            return HasParent(p->parent, potentialParent);
+        
+        return false;
+    }
+    
+    bool IsPopup(VPANEL vguiPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) return false;
+        return p->popup;
+    }
+    
+    void SetPopup(VPANEL vguiPanel, bool state) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) return;
+        p->popup = state;
+    }
+    
+    bool Render_GetPopupVisible( VPANEL ) override { return true; }
     void Render_SetPopupVisible( VPANEL, bool ) override {}
     HScheme GetScheme(VPANEL) override { return 0; }
     bool IsProportional(VPANEL) override { return false; }
@@ -164,7 +405,28 @@ public:
     void SetMouseInputEnabled(VPANEL, bool) override {}
     bool IsKeyBoardInputEnabled(VPANEL) override { return false; }
     bool IsMouseInputEnabled(VPANEL) override { return false; }
-    void Solve(VPANEL) override {}
+    
+    void Solve(VPANEL vguiPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) return;
+        
+        p->absPos[0] = p->pos[0];
+        p->absPos[1] = p->pos[1];
+        
+        if (p->parent != INVALID_PANEL && p->parent != 0)
+        {
+            PanelData_t *parent = GetPanelData(p->parent);
+            if (parent)
+            {
+                p->absPos[0] += parent->absPos[0];
+                p->absPos[1] += parent->absPos[1];
+            }
+        }
+        
+        p->needsSolve = false;
+    }
+    
     const char *GetName(VPANEL) override { return ""; }
     const char *GetClassName(VPANEL) override { return ""; }
     void SendMessage(VPANEL, KeyValues *, VPANEL) override {}
@@ -185,25 +447,111 @@ public:
     void *Plat(VPANEL) override { return NULL; }
     void SetPlat(VPANEL, void *) override {}
     void *GetPanel(VPANEL, const char *) override { return NULL; }
-    bool IsEnabled(VPANEL) override { return false; }
-    void SetEnabled(VPANEL, bool) override {}
+    bool IsEnabled(VPANEL vguiPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) return false;
+        return p->enabled;
+    }
+    void SetEnabled(VPANEL vguiPanel, bool state) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) return;
+        p->enabled = state;
+    }
     void *Client( VPANEL ) override { return NULL; }
     const char* GetModuleName( VPANEL ) override { return ""; }
 };
 
-// ISurface stub implementation
-class CSurfaceStub : public ISurface
+// ISurface real implementation
+class CSurfaceReal : public ISurface
 {
 public:
     void Shutdown() override {}
     void RunFrame() override {}
     VPANEL GetEmbeddedPanel() override { return (VPANEL)1; }
     void SetEmbeddedPanel( VPANEL ) override {}
-    void PushMakeCurrent(VPANEL, bool) override {}
-    void PopMakeCurrent(VPANEL) override {}
-    void DrawSetColor(int, int, int, int) override {}
-    void DrawFilledRect(int, int, int, int) override {}
-    void DrawOutlinedRect(int, int, int, int) override {}
+    
+    void PushMakeCurrent(VPANEL panel, bool useInsets) override
+    {
+        PanelData_t *p = GetPanelData(panel);
+        if (!p) return;
+        
+        int insets[4] = {0, 0, 0, 0};
+        if (useInsets)
+        {
+            insets[0] = p->insets[0];
+            insets[1] = p->insets[1];
+            insets[2] = p->insets[2];
+            insets[3] = p->insets[3];
+        }
+        
+        int x = p->absPos[0] + insets[0];
+        int y = p->absPos[1] + insets[1];
+        int w = p->size[0] - insets[0] - insets[2];
+        int h = p->size[1] - insets[1] - insets[3];
+        
+        if (x < s_currentClip[0]) {
+            w -= (s_currentClip[0] - x);
+            x = s_currentClip[0];
+        }
+        if (y < s_currentClip[1]) {
+            h -= (s_currentClip[1] - y);
+            y = s_currentClip[1];
+        }
+        if (x + w > s_currentClip[0] + s_currentClip[2])
+            w = s_currentClip[0] + s_currentClip[2] - x;
+        if (y + h > s_currentClip[1] + s_currentClip[3])
+            h = s_currentClip[1] + s_currentClip[3] - y;
+        
+        if (w <= 0 || h <= 0) return;
+        
+        if (s_clipStackDepth < 32)
+        {
+            memcpy(s_clipStack[s_clipStackDepth], s_currentClip, sizeof(int) * 4);
+            s_clipStackDepth++;
+        }
+        
+        s_currentClip[0] = x;
+        s_currentClip[1] = y;
+        s_currentClip[2] = w;
+        s_currentClip[3] = h;
+    }
+    
+    void PopMakeCurrent(VPANEL) override
+    {
+        if (s_clipStackDepth > 0)
+        {
+            s_clipStackDepth--;
+            memcpy(s_currentClip, s_clipStack[s_clipStackDepth], sizeof(int) * 4);
+        }
+    }
+    
+    void DrawSetColor(int r, int g, int b, int a) override
+    {
+        m_color[0] = r;
+        m_color[1] = g;
+        m_color[2] = b;
+        m_color[3] = a;
+    }
+    
+    void DrawFilledRect(int x0, int y0, int x1, int y1) override
+    {
+        int clipX = x0 < s_currentClip[0] ? s_currentClip[0] : x0;
+        int clipY = y0 < s_currentClip[1] ? s_currentClip[1] : y0;
+        int clipX1 = x1 > s_currentClip[0] + s_currentClip[2] ? s_currentClip[0] + s_currentClip[2] : x1;
+        int clipY1 = y1 > s_currentClip[1] + s_currentClip[3] ? s_currentClip[1] + s_currentClip[3] : y1;
+        
+        if (clipX >= clipX1 || clipY >= clipY1)
+            return;
+        
+        ref.dllFuncs.FillRGBA(kRenderTransTexture, 
+            (float)clipX, (float)clipY, 
+            (float)(clipX1 - clipX), (float)(clipY1 - clipY),
+            (byte)m_color[0], (byte)m_color[1], (byte)m_color[2], (byte)m_color[3]);
+    }
+    
+    void DrawOutlinedRect(int x0, int y0, int x1, int y1) override {}
     void DrawLine(int, int, int, int) override {}
     void DrawPolyLine(int *, int *, int) override {}
     void DrawSetTextFont(HFont) override {}
@@ -220,7 +568,11 @@ public:
     void DrawTexturedRect(int, int, int, int) override {}
     bool IsTextureIDValid(int) override { return false; }
     int CreateNewTextureID( bool ) override { return 0; }
-    void GetScreenSize(int &wide, int &tall) override { wide = 640; tall = 480; }
+    void GetScreenSize(int &wide, int &tall) override 
+    { 
+        wide = refState.width; 
+        tall = refState.height; 
+    }
     void SetAsTopMost(VPANEL, bool) override {}
     void BringToFront(VPANEL) override {}
     void SetForegroundWindow (VPANEL) override {}
@@ -265,11 +617,20 @@ public:
     void ReleasePanel(VPANEL) override {}
     void MovePopupToFront(VPANEL) override {}
     void MovePopupToBack(VPANEL) override {}
-    void SolveTraverse(VPANEL, bool) override {}
-    void PaintTraverse(VPANEL) override {}
+    
+    void SolveTraverse(VPANEL panel, bool) override
+    {
+        SolveTraverse_Recursive(panel);
+    }
+    
+    void PaintTraverse(VPANEL panel) override
+    {
+        PaintTraverse_Recursive(panel);
+    }
+    
     void EnableMouseCapture(VPANEL, bool) override {}
-    void GetWorkspaceBounds(int &x, int &y, int &wide, int &tall) override { x = y = 0; wide = 640; tall = 480; }
-    void GetAbsoluteWindowBounds(int &x, int &y, int &wide, int &tall) override { x = y = 0; wide = 640; tall = 480; }
+    void GetWorkspaceBounds(int &x, int &y, int &wide, int &tall) override { x = y = 0; wide = refState.width; tall = refState.height; }
+    void GetAbsoluteWindowBounds(int &x, int &y, int &wide, int &tall) override { x = y = 0; wide = refState.width; tall = refState.height; }
     void GetProportionalBase( int &, int &) override {}
     void CalculateMouseVisible() override {}
     bool NeedKBInput() override { return false; }
@@ -294,7 +655,78 @@ public:
     void SetProportionalBase(int, int) override {}
     void GetHDProportionalBase(int &, int &) override {}
     void SetHDProportionalBase(int, int) override {}
+
+private:
+    int m_color[4] = {255, 255, 255, 255};
+    
+    bool IsPanelVisible(VPANEL panel)
+    {
+        PanelData_t *p = GetPanelData(panel);
+        if (!p) return false;
+        
+        if (!p->visible)
+            return false;
+        
+        if (p->parent != INVALID_PANEL && p->parent != 0)
+            return IsPanelVisible(p->parent);
+        
+        return true;
+    }
+    
+    void SolveTraverse_Recursive(VPANEL panel)
+    {
+        PanelData_t *p = GetPanelData(panel);
+        if (!p) return;
+        
+        if (p->needsSolve)
+        {
+            p->absPos[0] = p->pos[0];
+            p->absPos[1] = p->pos[1];
+            
+            if (p->parent != INVALID_PANEL && p->parent != 0)
+            {
+                PanelData_t *parent = GetPanelData(p->parent);
+                if (parent)
+                {
+                    p->absPos[0] += parent->absPos[0];
+                    p->absPos[1] += parent->absPos[1];
+                }
+            }
+            p->needsSolve = false;
+        }
+        
+        for (int i = 0; i < p->childCount; i++)
+        {
+            if (p->children[i] != INVALID_PANEL)
+                SolveTraverse_Recursive(p->children[i]);
+        }
+    }
+    
+    void PaintTraverse_Recursive(VPANEL panel)
+    {
+        PanelData_t *p = GetPanelData(panel);
+        if (!p) return;
+        
+        if (!IsPanelVisible(panel))
+            return;
+        
+        PushMakeCurrent(panel, true);
+        
+        DrawFilledRect(p->absPos[0], p->absPos[1], 
+                       p->absPos[0] + p->size[0], 
+                       p->absPos[1] + p->size[1]);
+        
+        for (int i = 0; i < p->childCount; i++)
+        {
+            if (p->children[i] != INVALID_PANEL)
+                PaintTraverse_Recursive(p->children[i]);
+        }
+        
+        PopMakeCurrent(panel);
+    }
 };
+
+static CSurfaceReal s_TheSurface;
 
 // IInputInternal stub implementation
 class CInputInternalStub : public IInputInternal
@@ -424,8 +856,8 @@ public:
 
 // Static instances
 static CVGuiStub s_IVGui;
-static CPanelStub s_IPanel;
-static CSurfaceStub s_ISurface;
+static CPanelReal s_IPanel;
+static CSurfaceReal s_ISurface;
 static CInputInternalStub s_IInputInternal;
 static CSchemeManagerStub s_ISchemeManager;
 static CLocalizeStub s_ILocalize;
