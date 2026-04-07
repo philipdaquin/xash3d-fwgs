@@ -2183,25 +2183,147 @@ qboolean FS_GetRootDirectory( char *path, size_t size )
 }
 
 /*
-====================
+===================
+FS_IsVGui2AssetPath
+
+Returns true if the path is a VGUI2-critical asset that should
+be resolved from the active game directory first.
+===================
+*/
+qboolean FS_IsVGui2AssetPath( const char *path )
+{
+	if( !COM_CheckString( path ) )
+		return false;
+
+	// exact resource/ClientScheme.res
+	if( !Q_strcmp( path, "resource/ClientScheme.res" ) )
+		return true;
+
+	// exact resource/GameMenu.res
+	if( !Q_strcmp( path, "resource/GameMenu.res" ) )
+		return true;
+
+	// resource/UI/*
+	if( !Q_strnicmp( path, "resource/UI/", 12 ) )
+		return true;
+
+	// resource/*_english.txt
+	if( !Q_strnicmp( path, "resource/", 9 ) &&
+		Q_strstr( path, "_english" ) &&
+		!Q_stricmp( COM_FileExtension( path ), "txt" ) )
+		return true;
+
+	// gfx/vgui/*
+	if( !Q_strnicmp( path, "gfx/vgui/", 9 ) )
+		return true;
+
+	// sprites/*
+	if( !Q_strnicmp( path, "sprites/", 8 ) )
+		return true;
+
+	return false;
+}
+
+static qboolean fs_vgui2_log = false;
+
+/*
+===================
+FS_SetVGui2Debug
+
+Enable or disable VGUI2 asset lookup debug logging.
+Called by the engine to toggle verbose logging for
+VGUI2 asset path resolution.
+===================
+*/
+void FS_SetVGui2Debug( qboolean enable )
+{
+	fs_vgui2_log = enable;
+}
+
+/*
+===================
 FS_FindFile
 
 Look for a file in the packages and in the filesystem
 
 Return the searchpath where the file was found (or NULL)
 and the file index in the package if relevant
-====================
+===================
 */
 searchpath_t *FS_FindFile( const char *name, int *index, char *fixedname, size_t len, qboolean gamedironly )
 {
 	searchpath_t	*search;
+	qboolean isVGui2Path = FS_IsVGui2AssetPath( name );
 
-	// search through the path, one element at a time
+	// VGUI2 asset: two-pass search (game dir first, then fallback)
+	if( isVGui2Path )
+	{
+		// PASS 1: gamedir only
+		for( search = fs_searchpaths; search; search = search->next )
+		{
+			int pack_ind;
+
+			if( !FBitSet( search->flags, FS_GAMEDIR_PATH ) )
+				continue;
+
+			pack_ind = search->pfnFindFile( search, name, fixedname, len );
+			if( pack_ind >= 0 )
+			{
+				if( index )
+					*index = pack_ind;
+
+				if( fs_vgui2_log )
+				{
+					Con_DPrintf( "VGUI2: path='%s' classified=1 gamedir_hit=1 fallback_hit=0 resolved='%s' from='%s'\n",
+						name, fixedname ? fixedname : name, search->filename );
+				}
+
+				return search;
+			}
+		}
+
+		// PASS 2: fallback to all paths
+		for( search = fs_searchpaths; search; search = search->next )
+		{
+			int pack_ind;
+
+			if( gamedironly && !FBitSet( search->flags, FS_GAMEDIRONLY_SEARCH_FLAGS ) )
+				continue;
+
+			pack_ind = search->pfnFindFile( search, name, fixedname, len );
+			if( pack_ind >= 0 )
+			{
+				if( index )
+					*index = pack_ind;
+
+				if( fs_vgui2_log )
+				{
+					Con_DPrintf( "VGUI2: path='%s' classified=1 gamedir_hit=0 fallback_hit=1 resolved='%s' from='%s'\n",
+						name, fixedname ? fixedname : name, search->filename );
+				}
+
+				return search;
+			}
+		}
+
+		// not found at all
+		if( fs_vgui2_log )
+		{
+			Con_DPrintf( "VGUI2: path='%s' classified=1 gamedir_hit=0 fallback_hit=0 resolved='<not found>'\n", name );
+		}
+
+		if( index != NULL )
+			*index = -1;
+
+		return NULL;
+	}
+
+	// Normal search for non-VGUI2 paths
 	for( search = fs_searchpaths; search; search = search->next )
 	{
 		int pack_ind;
 
-		if( gamedironly & !FBitSet( search->flags, FS_GAMEDIRONLY_SEARCH_FLAGS ))
+		if( gamedironly && !FBitSet( search->flags, FS_GAMEDIRONLY_SEARCH_FLAGS ) )
 			continue;
 
 		pack_ind = search->pfnFindFile( search, name, fixedname, len );
@@ -3579,6 +3701,8 @@ const fs_api_t g_api =
 	FS_GetRootDirectory,
 
 	FS_MakeGameInfo,
+
+	FS_SetVGui2Debug,
 };
 
 int EXPORT GetFSAPI( int version, fs_api_t *api, fs_globals_t **globals, fs_interface_t *engfuncs );

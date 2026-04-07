@@ -240,6 +240,9 @@ typedef struct fs_api_t
 	qboolean (*GetRootDirectory)( char *path, size_t size );
 
 	void (*MakeGameInfo)( void );
+
+	// VGUI2 debug logging control
+	void (*SetVGui2Debug)( qboolean enable );
 } fs_api_t;
 
 typedef struct fs_interface_t
