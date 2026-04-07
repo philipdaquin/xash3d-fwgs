@@ -22,7 +22,7 @@ static vgui2::VPANEL s_testPanel = 0;
 static qboolean s_testPanelCreated = false;
 
 // Test injection cvar
-static convar_t *vgui2_test = NULL;
+CVAR_CREATE( vgui2_test, "1", FCVAR_ARCHIVE, "enable VGUI2 rendering test (rect + text)" );
 
 static void *VGui2_CreateInterface( const char *pName, int *pReturnCode )
 {
@@ -44,9 +44,6 @@ void VGui2_Init( void )
 {
     if( g_iVGui2Initialized )
         return;
-
-    // Register test cvar
-    vgui2_test = Cvar_Get( "vgui2_test", "1", FCVAR_ARCHIVE, "enable VGUI2 rendering test (rect + text)" );
 
     g_VGui2Interfaces.Init();
 
