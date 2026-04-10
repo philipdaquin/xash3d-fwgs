@@ -8,8 +8,7 @@
 #include "common.h"
 #include "client.h"
 
-#include <Color.h>
-#include <vgui/IImage.h>
+#include "../../../3rdparty/tier1/Color.h"
 
 #define FONTFLAG_NONE         0
 #define FONTFLAG_ITALIC      0x001
@@ -27,6 +26,19 @@
 
 namespace vgui2
 {
+
+class IImage
+{
+public:
+    virtual void Paint() = 0;
+    virtual void SetPos(int x, int y) = 0;
+    virtual void GetContentSize(int &wide, int &tall) = 0;
+    virtual void GetSize(int &wide, int &tall) = 0;
+    virtual void SetSize(int wide, int tall) = 0;
+    virtual void SetColor(Color col) = 0;
+    virtual ~IImage() {}
+    virtual void SetAdditive(bool) {}
+};
 
 class CTextureImage : public IImage
 {

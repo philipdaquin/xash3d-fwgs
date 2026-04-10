@@ -42,7 +42,12 @@ void Platform_Sleep( int msec )
 #if XASH_MESSAGEBOX == MSGBOX_SDL
 void Platform_MessageBox( const char *title, const char *message, qboolean parentMainWindow )
 {
+#if XASH_EMSCRIPTEN
+	(void)parentMainWindow;
+	Con_Reportf( S_ERROR "MessageBox suppressed on Emscripten: %s: %s\n", title, message );
+#else
 	SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, title, message, parentMainWindow ? host.hWnd : NULL );
+#endif
 }
 #endif // XASH_MESSAGEBOX == MSGBOX_SDL
 

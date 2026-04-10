@@ -8,14 +8,11 @@
 #include "ref_common.h"
 #include "VFileSystem009.h"
 
-#include <Color.h>
-#include <vgui/IImage.h>
+#include "../../../3rdparty/tier1/Color.h"
 
 #define CONPRINTF(...) Con_Reportf(__VA_ARGS__)
 
 #define STUB_PRINTF(...) CONPRINTF("VGUI2 stub: %s:%d - ", __FILE__, __LINE__); CONPRINTF(__VA_ARGS__)
-
-extern IFileSystem g_VFileSystem009;
 
 namespace vgui2
 {
@@ -76,6 +73,11 @@ static VPANEL s_embeddedPanel = 0;
 static FontData_t s_fontData[MAX_VGUI2_FONTS];
 static TextureData_t s_textureData[MAX_VGUI2_TEXTURES];
 static int s_nextTextureId = 1;
+
+static IFileSystem *GetVFileSystem()
+{
+    return (IFileSystem *)FS_GetNativeObject(FILESYSTEM_INTERFACE_VERSION);
+}
 
 static inline PanelData_t *GetPanelData(VPANEL panel)
 {
@@ -697,7 +699,7 @@ public:
 
         TextureData_t &tex = s_textureData[id];
         Q_snprintf(tex.name, sizeof(tex.name), "*vgui2_%d", id);
-        tex.glTexnum = ref.dllFuncs.GL_CreateTexture(tex.name, wide, tall, rgba, TF_IMAGE | TF_NOMIPMAP);
+        tex.glTexnum = ref.dllFuncs.GL_CreateTexture(tex.name, wide, tall, rgba, (texFlags_t)(TF_IMAGE | TF_NOMIPMAP));
         tex.wide = wide;
         tex.tall = tall;
         tex.valid = (tex.glTexnum != 0);
@@ -801,7 +803,7 @@ public:
         fontData.flags = flags;
         fontData.lowRange = lowRange;
         fontData.highRange = highRange;
-        fontData.charWidth = max(4, fontData.tall / 2);
+        fontData.charWidth = Q_max(4, fontData.tall / 2);
         return true;
     }
     bool AddCustomFontFile(const char *) override { return true; }
@@ -872,7 +874,7 @@ public:
     void SurfaceGetCursorPos(int &x, int &y) override { x = y = 0; }
     void SurfaceSetCursorPos(int, int) override {}
     void DrawTexturedPolygon(void *, int) override {}
-    int GetFontAscent( HFont font, wchar_t ) override { return max(0, GetFontTall(font) - 2); }
+    int GetFontAscent( HFont font, wchar_t ) override { return Q_max(0, GetFontTall(font) - 2); }
     void SetAllowHTMLJavaScript( bool ) override {}
     void SetLanguage( const char* ) override {}
     const char* GetLanguage() override { return "english"; }
@@ -1135,7 +1137,7 @@ void CVGui2Interfaces::Init()
     m_pISchemeManager = vgui2::GetSchemeManager();
     m_pILocalize = vgui2::GetLocalizeImpl();
     m_pISystem = &vgui2::s_ISystem;
-    vgui2::SetLocalizeFileSystemImpl(&g_VFileSystem009);
+    vgui2::SetLocalizeFileSystemImpl(vgui2::GetVFileSystem());
     
     m_bInitialized = true;
     
@@ -1183,7 +1185,7 @@ void *CVGui2Interfaces::CreateInterface( const char *pName, int *pReturnCode )
     else if( !Q_strcmp( pName, VGUI_SYSTEM_INTERFACE_VERSION_GS ) )
         pInterface = m_pISystem;
     else if( !Q_strcmp( pName, FILESYSTEM_INTERFACE_VERSION ) )
-        pInterface = &g_VFileSystem009;
+        pInterface = vgui2::GetVFileSystem();
     else if( !Q_strcmp( pName, IBASEUI_NAME ) )
         Con_Reportf("VGUI2: Unsupported interface requested: %s (returning NULL)\n", pName);
     else if( !Q_strcmp( pName, VENGINE_VGUI_VERSION ) )
