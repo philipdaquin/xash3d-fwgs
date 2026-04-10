@@ -129,7 +129,11 @@ void VGui2_Shutdown( void )
 void VGui2_Frame( void )
 {
     // DEBUG: Con_Printf with S_NOTE to match engine startup text visibility
-    Con_Printf( S_NOTE "VGUI2 FRAME ENTERED\n" );
+#if defined( VGUI2_STUB_MODE )
+    Con_Printf( S_NOTE "VGUI2 FRAME ENTERED (VGUI2_STUB_MODE=true)\n" );
+#else
+    Con_Printf( S_NOTE "VGUI2 FRAME ENTERED (VGUI2_STUB_MODE=false)\n" );
+#endif
 
     if( !g_iVGui2Initialized )
     {
@@ -149,7 +153,7 @@ void VGui2_Frame( void )
         return;
 
     // DEBUG: Confirm we're in the right frame
-    Con_Printf( S_NOTE "VGUI2: frame running, rootPanel=%d\n", (int)s_rootPanel );
+    // Con_Printf( S_NOTE "VGUI2: frame running, rootPanel=%d\n", (int)s_rootPanel );
 
     // =============================================================
     // DEBUG PASS: Direct unclipped rectangle draw
@@ -204,8 +208,8 @@ void VGui2_Frame( void )
     */
 
     // 3. Test injection (red rect via surface interface) - only if vgui2_test is enabled
-    Con_Printf( S_NOTE "VGUI2: vgui2_test=%p, value=%.1f\n",
-        vgui2_test, vgui2_test ? vgui2_test->value : -1 );
+    // Con_Printf( S_NOTE "VGUI2: vgui2_test=%p, value=%.1f\n",
+    //     vgui2_test, vgui2_test ? vgui2_test->value : -1 );
 
     if( vgui2_test && vgui2_test->value && s_testPanel != 0 )
     {

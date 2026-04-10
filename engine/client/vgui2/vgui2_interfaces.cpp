@@ -6,16 +6,50 @@
 #include "common.h"
 #include "client.h"
 #include "ref_common.h"
+#include "VFileSystem009.h"
+
+#include <Color.h>
+#include <vgui/IImage.h>
 
 #define CONPRINTF(...) Con_Reportf(__VA_ARGS__)
 
 #define STUB_PRINTF(...) CONPRINTF("VGUI2 stub: %s:%d - ", __FILE__, __LINE__); CONPRINTF(__VA_ARGS__)
 
+extern IFileSystem g_VFileSystem009;
+
 namespace vgui2
 {
 
+extern ILocalize *GetLocalizeImpl();
+extern void SetLocalizeFileSystemImpl(IFileSystem *pFileSystem);
+
 #define MAX_PANELS 256
 #define MAX_CHILDREN 32
+#define MAX_VGUI2_FONTS 128
+#define MAX_VGUI2_TEXTURES 256
+
+struct FontData_t
+{
+    bool valid;
+    int tall;
+    int weight;
+    int blur;
+    int scanlines;
+    int flags;
+    int lowRange;
+    int highRange;
+    int charWidth;
+    char name[64];
+};
+
+struct TextureData_t
+{
+    bool valid;
+    int glTexnum;
+    int wide;
+    int tall;
+    char name[128];
+};
 
 struct PanelData_t
 {
@@ -34,10 +68,14 @@ struct PanelData_t
 };
 
 static PanelData_t s_panelData[MAX_PANELS];
-static unsigned int s_panelCount = 1;
+static unsigned int s_panelCount = 0;
 static int s_currentClip[4] = { 0, 0, 99999, 99999 };
 static int s_clipStack[32][4];
 static int s_clipStackDepth = 0;
+static VPANEL s_embeddedPanel = 0;
+static FontData_t s_fontData[MAX_VGUI2_FONTS];
+static TextureData_t s_textureData[MAX_VGUI2_TEXTURES];
+static int s_nextTextureId = 1;
 
 static inline PanelData_t *GetPanelData(VPANEL panel)
 {
@@ -109,12 +147,18 @@ public:
     
     VPANEL AllocPanel() override
     {
-        static unsigned int panelCounter = 1;
-        return (VPANEL)(panelCounter++);
+        return CreatePanel();
     }
     
-    void FreePanel(VPANEL) override
+    void FreePanel(VPANEL panel) override
     {
+        PanelData_t *p = GetPanelData(panel);
+        if (!p)
+            return;
+
+        memset(p, 0, sizeof(*p));
+        if (s_embeddedPanel == panel)
+            s_embeddedPanel = 0;
     }
     
     void DPrintf(const char *format, ...) override
@@ -467,10 +511,13 @@ public:
 class CSurfaceReal : public ISurface
 {
 public:
+    // Remaining non-blocking stubs are kept explicit here on purpose:
+    // popup/window management, browser integration, advanced cursor/focus handling,
+    // and texture update helpers below are still minimal until the client needs them.
     void Shutdown() override {}
     void RunFrame() override {}
-    VPANEL GetEmbeddedPanel() override { return (VPANEL)1; }
-    void SetEmbeddedPanel( VPANEL ) override {}
+    VPANEL GetEmbeddedPanel() override { return s_embeddedPanel; }
+    void SetEmbeddedPanel( VPANEL panel ) override { s_embeddedPanel = panel; }
     
     void PushMakeCurrent(VPANEL panel, bool useInsets) override
     {
@@ -579,20 +626,118 @@ public:
     void DrawOutlinedRect(int x0, int y0, int x1, int y1) override {}
     void DrawLine(int, int, int, int) override {}
     void DrawPolyLine(int *, int *, int) override {}
-    void DrawSetTextFont(HFont) override {}
-    void DrawSetTextColor(int, int, int, int) override {}
-    void DrawSetTextPos(int, int) override {}
-    void DrawGetTextPos(int& x,int& y) override { x = 0; y = 0; }
-    void DrawPrintText(const wchar_t *, int) override {}
-    void DrawUnicodeChar(wchar_t) override {}
+    void DrawSetTextFont(HFont font) override { m_textFont = font; }
+    void DrawSetTextColor(int r, int g, int b, int a) override
+    {
+        m_textColor[0] = r;
+        m_textColor[1] = g;
+        m_textColor[2] = b;
+        m_textColor[3] = a;
+    }
+    void DrawSetTextPos(int x, int y) override
+    {
+        m_textPos[0] = x;
+        m_textPos[1] = y;
+    }
+    void DrawGetTextPos(int& x,int& y) override
+    {
+        x = m_textPos[0];
+        y = m_textPos[1];
+    }
+    void DrawPrintText(const wchar_t *text, int textLen) override
+    {
+        if (!text || textLen <= 0)
+            return;
+
+        char ansi[2048];
+        int len = 0;
+        for (int i = 0; i < textLen && len < (int)sizeof(ansi) - 1; ++i)
+        {
+            wchar_t ch = text[i];
+            if (ch == L'\0')
+                break;
+            ansi[len++] = (ch >= 32 && ch < 127) ? (char)ch : '?';
+        }
+        ansi[len] = '\0';
+
+        rgba_t color = {
+            (byte)m_textColor[0],
+            (byte)m_textColor[1],
+            (byte)m_textColor[2],
+            (byte)m_textColor[3]
+        };
+
+        m_textPos[0] = Con_DrawString(m_textPos[0], m_textPos[1], ansi, color);
+    }
+    void DrawUnicodeChar(wchar_t ch) override
+    {
+        wchar_t text[2] = { ch, 0 };
+        DrawPrintText(text, 1);
+    }
     void DrawFlushText() override {}
-    void DrawSetTextureFile(int, const char *, int, bool) override {}
-    void DrawSetTextureRGBA(int, const unsigned char *, int, int, int, bool) override {}
-    void DrawSetTexture(int) override {}
-    void DrawGetTextureSize(int, int &, int &) override {}
-    void DrawTexturedRect(int, int, int, int) override {}
-    bool IsTextureIDValid(int) override { return false; }
-    int CreateNewTextureID( bool ) override { return 0; }
+    void DrawSetTextureFile(int id, const char *filename, int, bool) override
+    {
+        if (id <= 0 || id >= MAX_VGUI2_TEXTURES || !filename || !filename[0])
+            return;
+
+        TextureData_t &tex = s_textureData[id];
+        if (!tex.valid || Q_strcmp(tex.name, filename))
+        {
+            Q_strncpy(tex.name, filename, sizeof(tex.name) - 1);
+            tex.glTexnum = ref.dllFuncs.GL_LoadTexture(filename, NULL, 0, TF_IMAGE | TF_NOMIPMAP);
+            tex.wide = 0;
+            tex.tall = 0;
+            tex.valid = (tex.glTexnum != 0);
+        }
+    }
+    void DrawSetTextureRGBA(int id, const unsigned char *rgba, int wide, int tall, int, bool) override
+    {
+        if (id <= 0 || id >= MAX_VGUI2_TEXTURES || !rgba || wide <= 0 || tall <= 0)
+            return;
+
+        TextureData_t &tex = s_textureData[id];
+        Q_snprintf(tex.name, sizeof(tex.name), "*vgui2_%d", id);
+        tex.glTexnum = ref.dllFuncs.GL_CreateTexture(tex.name, wide, tall, rgba, TF_IMAGE | TF_NOMIPMAP);
+        tex.wide = wide;
+        tex.tall = tall;
+        tex.valid = (tex.glTexnum != 0);
+    }
+    void DrawSetTexture(int id) override { m_boundTexture = id; }
+    void DrawGetTextureSize(int id, int &wide, int &tall) override
+    {
+        if (id > 0 && id < MAX_VGUI2_TEXTURES && s_textureData[id].valid)
+        {
+            wide = s_textureData[id].wide;
+            tall = s_textureData[id].tall;
+            return;
+        }
+
+        wide = 0;
+        tall = 0;
+    }
+    void DrawTexturedRect(int x0, int y0, int x1, int y1) override
+    {
+        if (m_boundTexture <= 0 || m_boundTexture >= MAX_VGUI2_TEXTURES)
+            return;
+
+        TextureData_t &tex = s_textureData[m_boundTexture];
+        if (!tex.valid || tex.glTexnum == 0)
+            return;
+
+        ref.dllFuncs.Color4ub((byte)m_color[0], (byte)m_color[1], (byte)m_color[2], (byte)m_color[3]);
+        ref.dllFuncs.R_DrawStretchPic((float)x0, (float)y0, (float)(x1 - x0), (float)(y1 - y0),
+            0.0f, 0.0f, 1.0f, 1.0f, tex.glTexnum);
+    }
+    bool IsTextureIDValid(int id) override
+    {
+        return id > 0 && id < MAX_VGUI2_TEXTURES && s_textureData[id].valid;
+    }
+    int CreateNewTextureID( bool ) override
+    {
+        if (s_nextTextureId >= MAX_VGUI2_TEXTURES)
+            return 0;
+        return s_nextTextureId++;
+    }
     void GetScreenSize(int &wide, int &tall) override 
     { 
         wide = refState.width; 
@@ -624,13 +769,76 @@ public:
     void SetTranslateExtendedKeys(bool) override {}
     VPANEL GetTopmostPopup() override { return INVALID_PANEL; }
     void SetTopLevelFocus(VPANEL) override {}
-    HFont CreateFont() override { return INVALID_HFONT; }
-    bool AddGlyphSetToFont(HFont, const char *, int, int, int, int, int, int, int) override { return false; }
-    bool AddCustomFontFile(const char *) override { return false; }
-    int GetFontTall(HFont) override { return 0; }
-    void GetCharABCwide(HFont, int, int &, int &, int &) override {}
-    int GetCharacterWidth(HFont, int) override { return 0; }
-    void GetTextSize(HFont, const wchar_t *, int &, int &) override {}
+    HFont CreateFont() override
+    {
+        for (int i = 1; i < MAX_VGUI2_FONTS; ++i)
+        {
+            if (!s_fontData[i].valid)
+            {
+                memset(&s_fontData[i], 0, sizeof(s_fontData[i]));
+                s_fontData[i].valid = true;
+                s_fontData[i].tall = 12;
+                s_fontData[i].charWidth = 8;
+                return (HFont)i;
+            }
+        }
+        return INVALID_HFONT;
+    }
+    bool AddGlyphSetToFont(HFont font, const char *windowsFontName, int tall, int weight, int blur, int scanlines, int flags, int lowRange, int highRange) override
+    {
+        if (font <= 0 || font >= MAX_VGUI2_FONTS)
+            return false;
+
+        FontData_t &fontData = s_fontData[font];
+        if (!fontData.valid)
+            return false;
+
+        Q_strncpy(fontData.name, windowsFontName ? windowsFontName : "Default", sizeof(fontData.name) - 1);
+        fontData.tall = tall > 0 ? tall : 12;
+        fontData.weight = weight;
+        fontData.blur = blur;
+        fontData.scanlines = scanlines;
+        fontData.flags = flags;
+        fontData.lowRange = lowRange;
+        fontData.highRange = highRange;
+        fontData.charWidth = max(4, fontData.tall / 2);
+        return true;
+    }
+    bool AddCustomFontFile(const char *) override { return true; }
+    int GetFontTall(HFont font) override
+    {
+        if (font > 0 && font < MAX_VGUI2_FONTS && s_fontData[font].valid)
+            return s_fontData[font].tall;
+        return 12;
+    }
+    void GetCharABCwide(HFont font, int, int &a, int &b, int &c) override
+    {
+        a = 0;
+        b = GetCharacterWidth(font, 0);
+        c = 0;
+    }
+    int GetCharacterWidth(HFont font, int) override
+    {
+        if (font > 0 && font < MAX_VGUI2_FONTS && s_fontData[font].valid)
+            return s_fontData[font].charWidth;
+        return 8;
+    }
+    void GetTextSize(HFont font, const wchar_t *text, int &wide, int &tall) override
+    {
+        if (!text)
+        {
+            wide = 0;
+            tall = GetFontTall(font);
+            return;
+        }
+
+        int len = 0;
+        while (text[len] != 0)
+            ++len;
+
+        wide = len * GetCharacterWidth(font, 0);
+        tall = GetFontTall(font);
+    }
     VPANEL GetNotifyPanel() override { return INVALID_PANEL; }
     void SetNotifyIcon(VPANEL, HTexture, VPANEL, const char *) override {}
     void PlaySound(const char *) override {}
@@ -664,7 +872,7 @@ public:
     void SurfaceGetCursorPos(int &x, int &y) override { x = y = 0; }
     void SurfaceSetCursorPos(int, int) override {}
     void DrawTexturedPolygon(void *, int) override {}
-    int GetFontAscent( HFont, wchar_t ) override { return 0; }
+    int GetFontAscent( HFont font, wchar_t ) override { return max(0, GetFontTall(font) - 2); }
     void SetAllowHTMLJavaScript( bool ) override {}
     void SetLanguage( const char* ) override {}
     const char* GetLanguage() override { return "english"; }
@@ -684,6 +892,10 @@ public:
 
 private:
     int m_color[4] = {255, 255, 255, 255};
+    int m_textColor[4] = {255, 255, 255, 255};
+    int m_textPos[2] = {0, 0};
+    HFont m_textFont = INVALID_HFONT;
+    int m_boundTexture = 0;
     
     bool IsPanelVisible(VPANEL panel)
     {
@@ -921,8 +1133,9 @@ void CVGui2Interfaces::Init()
     m_pISurface = &vgui2::s_ISurface;
     m_pIInputInternal = &vgui2::s_IInputInternal;
     m_pISchemeManager = vgui2::GetSchemeManager();
-    m_pILocalize = &vgui2::s_ILocalize;
+    m_pILocalize = vgui2::GetLocalizeImpl();
     m_pISystem = &vgui2::s_ISystem;
+    vgui2::SetLocalizeFileSystemImpl(&g_VFileSystem009);
     
     m_bInitialized = true;
     
@@ -970,15 +1183,17 @@ void *CVGui2Interfaces::CreateInterface( const char *pName, int *pReturnCode )
     else if( !Q_strcmp( pName, VGUI_SYSTEM_INTERFACE_VERSION_GS ) )
         pInterface = m_pISystem;
     else if( !Q_strcmp( pName, FILESYSTEM_INTERFACE_VERSION ) )
-        pInterface = m_pIVGui;
+        pInterface = &g_VFileSystem009;
     else if( !Q_strcmp( pName, IBASEUI_NAME ) )
-        pInterface = m_pIVGui;
+        Con_Reportf("VGUI2: Unsupported interface requested: %s (returning NULL)\n", pName);
     else if( !Q_strcmp( pName, VENGINE_VGUI_VERSION ) )
-        pInterface = m_pIVGui;
+        Con_Reportf("VGUI2: Unsupported interface requested: %s (returning NULL)\n", pName);
     else if( !Q_strcmp( pName, IGAMEUIFUNCS_NAME ) )
-        pInterface = m_pISystem;
+        Con_Reportf("VGUI2: Unsupported interface requested: %s (returning NULL)\n", pName);
     else
         Con_Reportf("VGUI2: Unknown interface requested: %s\n", pName);
+
+    Con_Reportf("VGUI2: CreateInterface('%s') -> %p\n", pName, pInterface);
     
     if( pReturnCode )
         *pReturnCode = pInterface ? IFACE_OK : IFACE_FAILED;
