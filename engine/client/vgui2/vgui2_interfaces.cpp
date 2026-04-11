@@ -9,6 +9,10 @@
 #include "VFileSystem009.h"
 
 #include "../../../3rdparty/tier1/Color.h"
+#include <stdlib.h>
+#include <string.h>
+#include <string>
+#include <vector>
 
 #define CONPRINTF(...) Con_Reportf(__VA_ARGS__)
 
@@ -16,6 +20,22 @@
 
 namespace vgui2
 {
+
+typedef int HKeySymbol;
+
+class IKeyValues : public IBaseInterface
+{
+public:
+    virtual void RegisterSizeofKeyValues( int size ) = 0;
+    virtual void *AllocKeyValuesMemory( int size ) = 0;
+    virtual void FreeKeyValuesMemory( void *pMem ) = 0;
+    virtual HKeySymbol GetSymbolForString( const char *name ) = 0;
+    virtual const char *GetStringForSymbol( HKeySymbol symbol ) = 0;
+    virtual void GetLocalizedFromANSI( const char* ansi, wchar_t* outBuf, int unicodeBufferSizeInBytes ) = 0;
+    virtual void GetANSIFromLocalized( const wchar_t* unicode, char* outBuf, int ansiBufferSizeInBytes ) = 0;
+    virtual void AddKeyValuesToMemoryLeakList( void *pMem, HKeySymbol name ) = 0;
+    virtual void RemoveKeyValuesFromMemoryLeakList( void *pMem ) = 0;
+};
 
 extern ILocalize *GetLocalizeImpl();
 extern void SetLocalizeFileSystemImpl(IFileSystem *pFileSystem);
@@ -73,11 +93,94 @@ static VPANEL s_embeddedPanel = 0;
 static FontData_t s_fontData[MAX_VGUI2_FONTS];
 static TextureData_t s_textureData[MAX_VGUI2_TEXTURES];
 static int s_nextTextureId = 1;
+static const char *KEYVALUES_INTERFACE_VERSION = "KeyValues003";
 
 static IFileSystem *GetVFileSystem()
 {
     return (IFileSystem *)FS_GetNativeObject(FILESYSTEM_INTERFACE_VERSION);
 }
+
+class CKeyValuesStub : public IKeyValues
+{
+public:
+    void RegisterSizeofKeyValues( int size ) override
+    {
+        m_keyValueSize = size;
+        Con_Reportf( "VGUI2: KeyValues RegisterSizeofKeyValues(%d)\n", size );
+    }
+
+    void *AllocKeyValuesMemory( int size ) override
+    {
+        if( size <= 0 )
+            size = m_keyValueSize > 0 ? m_keyValueSize : 1;
+        return malloc( (size_t)size );
+    }
+
+    void FreeKeyValuesMemory( void *pMem ) override
+    {
+        free( pMem );
+    }
+
+    HKeySymbol GetSymbolForString( const char *name ) override
+    {
+        const std::string key = name ? name : "";
+        for( size_t i = 0; i < m_symbols.size(); ++i )
+        {
+            if( m_symbols[i] == key )
+                return (HKeySymbol)( i + 1 );
+        }
+
+        m_symbols.push_back( key );
+        return (HKeySymbol)m_symbols.size();
+    }
+
+    const char *GetStringForSymbol( HKeySymbol symbol ) override
+    {
+        const int index = symbol - 1;
+        if( index < 0 || index >= (int)m_symbols.size() )
+            return "";
+        return m_symbols[index].c_str();
+    }
+
+    void GetLocalizedFromANSI( const char* ansi, wchar_t* outBuf, int unicodeBufferSizeInBytes ) override
+    {
+        if( !outBuf || unicodeBufferSizeInBytes <= 0 )
+            return;
+
+        const int wcharCount = unicodeBufferSizeInBytes / (int)sizeof( wchar_t );
+        if( wcharCount <= 0 )
+            return;
+
+        int i = 0;
+        if( ansi )
+        {
+            for( ; i < wcharCount - 1 && ansi[i]; ++i )
+                outBuf[i] = (unsigned char)ansi[i];
+        }
+        outBuf[i] = L'\0';
+    }
+
+    void GetANSIFromLocalized( const wchar_t* unicode, char* outBuf, int ansiBufferSizeInBytes ) override
+    {
+        if( !outBuf || ansiBufferSizeInBytes <= 0 )
+            return;
+
+        int i = 0;
+        if( unicode )
+        {
+            for( ; i < ansiBufferSizeInBytes - 1 && unicode[i]; ++i )
+                outBuf[i] = ( unicode[i] >= 0 && unicode[i] <= 0x7f ) ? (char)unicode[i] : '?';
+        }
+        outBuf[i] = '\0';
+    }
+
+    void AddKeyValuesToMemoryLeakList( void *, HKeySymbol ) override {}
+    void RemoveKeyValuesFromMemoryLeakList( void * ) override {}
+
+private:
+    int m_keyValueSize = 0;
+    std::vector<std::string> m_symbols;
+};
 
 static inline PanelData_t *GetPanelData(VPANEL panel)
 {
@@ -583,6 +686,7 @@ public:
         m_color[2] = b;
         m_color[3] = a;
     }
+    void DrawSetColor(Color) override {}
     
     void DrawFilledRect(int x0, int y0, int x1, int y1) override
     {
@@ -636,6 +740,7 @@ public:
         m_textColor[2] = b;
         m_textColor[3] = a;
     }
+    void DrawSetTextColor(Color) override {}
     void DrawSetTextPos(int x, int y) override
     {
         m_textPos[0] = x;
@@ -676,7 +781,14 @@ public:
         wchar_t text[2] = { ch, 0 };
         DrawPrintText(text, 1);
     }
+    void DrawUnicodeCharAdd( wchar_t ch ) override
+    {
+        DrawUnicodeChar( ch );
+    }
     void DrawFlushText() override {}
+    IHTML *CreateHTMLWindow(vgui2::IHTMLEvents *, VPANEL) override { return NULL; }
+    void PaintHTMLWindow(vgui2::IHTML *) override {}
+    void DeleteHTMLWindow(IHTML *) override {}
     void DrawSetTextureFile(int id, const char *filename, int, bool) override
     {
         if (id <= 0 || id >= MAX_VGUI2_TEXTURES || !filename || !filename[0])
@@ -762,7 +874,7 @@ public:
     void ApplyChanges() override {}
     bool IsWithin(int, int) override { return false; }
     bool HasFocus() override { return false; }
-    bool SupportsFeature(int) override { return false; }
+    bool SupportsFeature(SurfaceFeature_e) override { return false; }
     void RestrictPaintToSinglePanel(VPANEL) override {}
     void SetModalPanel(VPANEL) override {}
     VPANEL GetModalPanel() override { return INVALID_PANEL; }
@@ -873,7 +985,7 @@ public:
     bool HasCursorPosFunctions() override { return false; }
     void SurfaceGetCursorPos(int &x, int &y) override { x = y = 0; }
     void SurfaceSetCursorPos(int, int) override {}
-    void DrawTexturedPolygon(void *, int) override {}
+    void DrawTexturedPolygon(VGuiVertex *, int) override {}
     int GetFontAscent( HFont font, wchar_t ) override { return Q_max(0, GetFontTall(font) - 2); }
     void SetAllowHTMLJavaScript( bool ) override {}
     void SetLanguage( const char* ) override {}
@@ -881,9 +993,9 @@ public:
     bool DeleteTextureByID( int ) override { return false; }
     void DrawUpdateRegionTextureBGRA( int, int, int, const unsigned char *, int, int ) override {}
     void DrawSetTextureBGRA( int, const unsigned char *, int, int ) override {}
-    void CreateBrowser( vgui2::VPANEL, void *, bool, const char * ) override {}
-    void RemoveBrowser( vgui2::VPANEL, void * ) override {}
-    void *AccessChromeHTMLController() override { return NULL; }
+    void CreateBrowser( vgui2::VPANEL, IHTMLResponses *, bool, const char * ) override {}
+    void RemoveBrowser( vgui2::VPANEL, IHTMLResponses * ) override {}
+    IHTMLChromeController *AccessChromeHTMLController() override { return NULL; }
     void DrawTexturedRectAdd(int, int, int, int) override {}
     void SetSupportsEsc(bool) override {}
     int GetFontBlur(vgui2::HFont) override { return 0; }
@@ -984,6 +1096,7 @@ private:
 };
 
 static CSurfaceReal s_TheSurface;
+static CKeyValuesStub s_IKeyValues;
 
 // IInputInternal stub implementation
 class CInputInternalStub : public IInputInternal
@@ -1184,6 +1297,8 @@ void *CVGui2Interfaces::CreateInterface( const char *pName, int *pReturnCode )
         pInterface = m_pILocalize;
     else if( !Q_strcmp( pName, VGUI_SYSTEM_INTERFACE_VERSION_GS ) )
         pInterface = m_pISystem;
+    else if( !Q_strcmp( pName, vgui2::KEYVALUES_INTERFACE_VERSION ) )
+        pInterface = &vgui2::s_IKeyValues;
     else if( !Q_strcmp( pName, FILESYSTEM_INTERFACE_VERSION ) )
         pInterface = vgui2::GetVFileSystem();
     else if( !Q_strcmp( pName, IBASEUI_NAME ) )

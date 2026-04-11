@@ -67,13 +67,13 @@ typedef void* (*CreateInterfaceFn)(const char *pName, int *pReturnCode);
 extern "C" {
 #endif
 
-int VGui2_IsInitialized( void );
-void VGui2_Init( void );
-void VGui2_Shutdown( void );
-void VGui2_Frame( void );
-void VGui2_GetInterfaces( CreateInterfaceFn *pFactory );
-CreateInterfaceFn VGui2_GetFactory( void );
-void *VGui2_GetInterface( const char *pName, int *pReturnCode );
+EXPORT int VGui2_IsInitialized( void );
+EXPORT void VGui2_Init( void );
+EXPORT void VGui2_Shutdown( void );
+EXPORT void VGui2_Frame( void );
+EXPORT void VGui2_GetInterfaces( CreateInterfaceFn *pFactory );
+EXPORT CreateInterfaceFn VGui2_GetFactory( void );
+EXPORT void *VGui2_GetInterface( const char *pName, int *pReturnCode );
 
 #ifdef __cplusplus
 }

@@ -175,10 +175,13 @@ Sound_LoadWAV
 qboolean Sound_LoadWAV( const char *name, const byte *buffer, fs_offset_t filesize )
 {
 	int	samples, fmt;
+	size_t	data_bytes, bytes_per_sample, bytes_remaining;
 	qboolean	mpeg_stream = false;
 
 	if( !buffer || filesize <= 0 )
 		return false;
+
+	Con_Printf( "SNDDBG: Sound_LoadWAV name='%s' filesize=%lld\n", name ? name : "<null>", (long long)filesize );
 
 	iff_data = buffer;
 	iff_end = buffer + filesize;
@@ -274,7 +277,30 @@ qboolean Sound_LoadWAV( const char *name, const byte *buffer, fs_offset_t filesi
 	}
 
 	iff_dataPtr += 4;
-	samples = GetLittleLong() / sound.width;
+	data_bytes = (size_t)GetLittleLong();
+	bytes_per_sample = (size_t)sound.width * (size_t)sound.channels;
+	bytes_remaining = (size_t)( iff_end - iff_dataPtr );
+
+	if( bytes_per_sample == 0 )
+	{
+		Con_Printf( S_ERROR "%s: invalid sample width/channels for %s\n", __func__, name );
+		return false;
+	}
+
+	if( data_bytes == 0 )
+	{
+		Con_Printf( S_ERROR "%s: %s has empty data chunk\n", __func__, name );
+		return false;
+	}
+
+	if( data_bytes > bytes_remaining )
+	{
+		Con_Printf( S_ERROR "%s: %s data chunk too large (%zu > %zu)\n",
+			__func__, name, data_bytes, bytes_remaining );
+		return false;
+	}
+
+	samples = data_bytes / sound.width;
 
 	if( sound.samples )
 	{
@@ -313,6 +339,13 @@ qboolean Sound_LoadWAV( const char *name, const byte *buffer, fs_offset_t filesi
 
 	// Load the data
 	sound.size = sound.samples * sound.width * sound.channels;
+	if( sound.size <= 0 || (size_t)sound.size > bytes_remaining )
+	{
+		Con_Printf( S_ERROR "%s: %s computed sound size invalid (%d > %zu)\n",
+			__func__, name, sound.size, bytes_remaining );
+		return false;
+	}
+
 	sound.wav = Mem_Malloc( host.soundpool, sound.size );
 
 	memcpy( sound.wav, buffer + (iff_dataPtr - buffer), sound.size );

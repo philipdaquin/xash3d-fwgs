@@ -2,9 +2,33 @@
 #define VGUI2_INTERFACES_H
 
 #include "VGUI2.h"
+#include "../../../3rdparty/tier1/Color.h"
+
+class IHTMLResponses;
+class IHTMLChromeController;
 
 namespace vgui2
 {
+
+class IHTML;
+class IHTMLEvents;
+
+struct VGuiVertex
+{
+    VGuiVertex() : x( 0 ), y( 0 ), u( 0 ), v( 0 ) {}
+    VGuiVertex( int xIn, int yIn, float uIn = 0, float vIn = 0 )
+        : x( xIn ), y( yIn ), u( uIn ), v( vIn ) {}
+    void Init( int xIn, int yIn, float uIn = 0, float vIn = 0 )
+    {
+        x = xIn;
+        y = yIn;
+        u = uIn;
+        v = vIn;
+    }
+
+    int x, y;
+    float u, v;
+};
 
 class IVGui : public IBaseInterface
 {
@@ -109,17 +133,23 @@ public:
     virtual void PushMakeCurrent(VPANEL panel, bool useInsets) = 0;
     virtual void PopMakeCurrent(VPANEL panel) = 0;
     virtual void DrawSetColor(int r, int g, int b, int a) = 0;
+    virtual void DrawSetColor( Color col ) = 0;
     virtual void DrawFilledRect(int x0, int y0, int x1, int y1) = 0;
     virtual void DrawOutlinedRect(int x0, int y0, int x1, int y1) = 0;
     virtual void DrawLine(int x0, int y0, int x1, int y1) = 0;
     virtual void DrawPolyLine(int *px, int *py, int numPoints) = 0;
     virtual void DrawSetTextFont(HFont font) = 0;
     virtual void DrawSetTextColor(int r, int g, int b, int a) = 0;
+    virtual void DrawSetTextColor( Color col ) = 0;
     virtual void DrawSetTextPos(int x, int y) = 0;
     virtual void DrawGetTextPos(int& x,int& y) = 0;
     virtual void DrawPrintText(const wchar_t *text, int textLen) = 0;
     virtual void DrawUnicodeChar(wchar_t wch) = 0;
+    virtual void DrawUnicodeCharAdd( wchar_t wch ) = 0;
     virtual void DrawFlushText() = 0;
+    virtual IHTML *CreateHTMLWindow(vgui2::IHTMLEvents *events,VPANEL context) = 0;
+    virtual void PaintHTMLWindow(vgui2::IHTML *htmlwin) = 0;
+    virtual void DeleteHTMLWindow(IHTML *htmlwin) = 0;
     virtual void DrawSetTextureFile(int id, const char *filename, int hardwareFilter, bool forceReload) = 0;
     virtual void DrawSetTextureRGBA(int id, const unsigned char *rgba, int wide, int tall, int hardwareFilter, bool forceReload)=0;
     virtual void DrawSetTexture(int id) = 0;
@@ -127,6 +157,12 @@ public:
     virtual void DrawTexturedRect(int x0, int y0, int x1, int y1) = 0;
     virtual bool IsTextureIDValid(int id) = 0;
     virtual int CreateNewTextureID( bool procedural ) = 0;
+#ifdef _XBOX
+    virtual void DestroyTextureID( int id ) = 0;
+    virtual bool IsCachedForRendering( int id, bool bSyncWait ) = 0;
+    virtual void CopyFrontBufferToBackBuffer() = 0;
+    virtual void UncacheUnusedMaterials() = 0;
+#endif
     virtual void GetScreenSize(int &wide, int &tall) = 0;
     virtual void SetAsTopMost(VPANEL panel, bool state) = 0;
     virtual void BringToFront(VPANEL panel) = 0;
@@ -145,7 +181,17 @@ public:
     virtual void ApplyChanges() = 0;
     virtual bool IsWithin(int x, int y) = 0;
     virtual bool HasFocus() = 0;
-    virtual bool SupportsFeature(int feature) = 0;
+    enum SurfaceFeature_e
+    {
+        ANTIALIASED_FONTS = 1,
+        DROPSHADOW_FONTS = 2,
+        ESCAPE_KEY = 3,
+        OPENING_NEW_HTML_WINDOWS = 4,
+        FRAME_MINIMIZE_MAXIMIZE = 5,
+        OUTLINE_FONTS = 6,
+        DIRECT_HWND_RENDER = 7,
+    };
+    virtual bool SupportsFeature(SurfaceFeature_e feature) = 0;
     virtual void RestrictPaintToSinglePanel(VPANEL panel) = 0;
     virtual void SetModalPanel(VPANEL) = 0;
     virtual VPANEL GetModalPanel() = 0;
@@ -183,7 +229,7 @@ public:
     virtual bool HasCursorPosFunctions() = 0;
     virtual void SurfaceGetCursorPos(int &x, int &y) = 0;
     virtual void SurfaceSetCursorPos(int x, int y) = 0;
-    virtual void DrawTexturedPolygon(void *pVertices, int n) = 0;
+    virtual void DrawTexturedPolygon(VGuiVertex *pVertices, int n) = 0;
     virtual int GetFontAscent( HFont font, wchar_t wch ) = 0;
     virtual void SetAllowHTMLJavaScript( bool state ) = 0;
     virtual void SetLanguage( const char* pchLang ) = 0;
@@ -191,9 +237,9 @@ public:
     virtual bool DeleteTextureByID( int id ) = 0;
     virtual void DrawUpdateRegionTextureBGRA( int nTextureID, int x, int y, const unsigned char *pchData, int wide, int tall ) = 0;
     virtual void DrawSetTextureBGRA( int id, const unsigned char *pchData, int wide, int tall ) = 0;
-    virtual void CreateBrowser( vgui2::VPANEL panel, void *pBrowser, bool bPopupWindow, const char *pchUserAgentIdentifier ) = 0;
-    virtual void RemoveBrowser( vgui2::VPANEL panel, void *pBrowser ) = 0;
-    virtual void *AccessChromeHTMLController() = 0;
+    virtual void CreateBrowser( vgui2::VPANEL panel, IHTMLResponses *pBrowser, bool bPopupWindow, const char *pchUserAgentIdentifier ) = 0;
+    virtual void RemoveBrowser( vgui2::VPANEL panel, IHTMLResponses *pBrowser ) = 0;
+    virtual IHTMLChromeController *AccessChromeHTMLController() = 0;
     virtual void DrawTexturedRectAdd(int x0, int y0, int x1, int y1) = 0;
     virtual void SetSupportsEsc(bool bSupportsEsc) = 0;
     virtual int GetFontBlur(vgui2::HFont font) = 0;
