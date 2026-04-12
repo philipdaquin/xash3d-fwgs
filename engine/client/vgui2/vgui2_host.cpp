@@ -134,7 +134,6 @@ extern "C" EXPORT void VGui2_Frame( void )
         return;
     }
 
-    // 1. RunFrame - processes deletion queue
     vgui2::IVGui *ivgui = g_VGui2Interfaces.GetIVGui();
     vgui2::IPanel *ipanel = g_VGui2Interfaces.GetIPanel();
     vgui2::ISurface *isurface = g_VGui2Interfaces.GetISurface();
@@ -142,16 +141,14 @@ extern "C" EXPORT void VGui2_Frame( void )
     if( ivgui )
         ivgui->RunFrame();
 
+    // TEMPORARY ISOLATION:
+    // Disable all per-frame VGUI2 host work except deletion-queue draining.
+    /*
     if( !ipanel || !isurface )
         return;
 
     // DEBUG: Confirm we're in the right frame
     // Con_Printf( S_NOTE "VGUI2: frame running, rootPanel=%d\n", (int)s_rootPanel );
-
-    // =============================================================
-    // DEBUG PASS: Direct unclipped rectangle draw
-    // Purpose: Test if ref.dllFuncs.FillRGBA works without panel traversal
-    // =============================================================
 
     // Create test panel once (on first frame) - skip if already created
     if( !s_testPanelCreated && s_rootPanel != 0 )
@@ -170,48 +167,32 @@ extern "C" EXPORT void VGui2_Frame( void )
     }
 
     // Bypass panel traversal entirely - draw DIRECTLY with FillRGBA
-    // Large bright red rectangle at (50, 50) size 500x300
-    // TEMPORARY DEBUG: Direct FillRGBA call with NO clipping/scissor
-    // Using bright red (255,0,0) at a visible screen position
-    // Coordinates: x=50, y=50, w=500, h=300 - should be unmistakable
     ref.dllFuncs.FillRGBA( kRenderTransTexture, 50.0f, 50.0f, 500.0f, 300.0f, 255, 0, 0, 255 );
 
-    // =============================================================
-    // END DEBUG PASS
-    // =============================================================
-
-    // 2. Panel traversal (normal VGUI2 path) - commented out for debug
-    /*
+    // Normal VGUI2 path
     if( s_rootPanel == 0 )
     {
         Con_Printf( S_NOTE "VGUI2: ABORT - s_rootPanel is 0!\n" );
     }
     else
     {
-        // Solve absolute positions FIRST
         isurface->SolveTraverse( s_rootPanel, false );
-
-        // THEN paint
         isurface->PaintTraverse( s_rootPanel );
     }
-    */
 
-    // 3. Test injection (red rect via surface interface) - only if vgui2_test is enabled
-    // Con_Printf( S_NOTE "VGUI2: vgui2_test=%p, value=%.1f\n",
-    //     vgui2_test, vgui2_test ? vgui2_test->value : -1 );
-
+    // Test injection (red rect via surface interface) - only if vgui2_test is enabled
     if( vgui2_test && vgui2_test->value && s_testPanel != 0 )
     {
-        // This uses the VGUI2 surface interface (not direct FillRGBA)
         isurface->DrawSetColor( 0, 255, 0, 255 );
-        isurface->DrawFilledRect( 50, 400, 250, 500 ); // green rect below red one
+        isurface->DrawFilledRect( 50, 400, 250, 500 );
 
-        // Text is stubbed - won't render
         isurface->DrawSetTextColor( 255, 255, 255, 255 );
         isurface->DrawSetTextPos( 60, 410 );
         wchar_t testText[] = L"VGUI2 TEST";
         isurface->DrawPrintText( testText, wcslen( testText ) );
     }
+    */
+    return;
 }
 
 extern "C" EXPORT void VGui2_GetInterfaces( CreateInterfaceFn *pFactory )

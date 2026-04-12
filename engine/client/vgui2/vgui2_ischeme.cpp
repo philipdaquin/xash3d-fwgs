@@ -132,9 +132,9 @@ class CScheme : public IScheme
 {
 public:
     const char *GetResourceString(const char *stringName) override { return ""; }
-    void *GetBorder(const char *borderName) override { return NULL; }
+    IBorder *GetBorder(const char *borderName) override { return NULL; }
     HFont GetFont(const char *fontName, bool proportional) override;
-    int GetColor(const char *colorName, int defaultColor) override;
+    Color GetColor(const char *colorName, Color defaultColor) override;
     HFont GetFontEx(const char *fontName, bool proportional, bool hdProportional) override
         { return GetFont(fontName, proportional); }
 
@@ -155,14 +155,14 @@ HFont CScheme::GetFont(const char *fontName, bool /*proportional*/)
     return INVALID_HFONT;
 }
 
-int CScheme::GetColor(const char *colorName, int defaultColor)
+Color CScheme::GetColor(const char *colorName, Color defaultColor)
 {
     for( int i = 0; i < m_nColors; i++ )
     {
         if( !Q_strcmp(m_Colors[i].name, colorName) )
         {
             ColorEntry_t &c = m_Colors[i];
-            return (c.a << 24) | (c.r << 16) | (c.g << 8) | c.b;
+            return Color( c.r, c.g, c.b, c.a );
         }
     }
     return defaultColor;
@@ -239,7 +239,7 @@ public:
     void ReloadSchemes() override {}
     HScheme GetDefaultScheme() override { return m_defaultScheme; }
     HScheme GetScheme(const char *tag) override;
-    void *GetImage(const char *imageName, bool hardwareFiltered) override;
+    IImage *GetImage(const char *imageName, bool hardwareFiltered) override;
     HTexture GetImageID(const char *, bool) override { return 0; }
     IScheme *GetIScheme(HScheme scheme) override;
     void Shutdown(bool) override {}
@@ -262,7 +262,7 @@ private:
     char m_ImageNames[64][MAX_QPATH] = {};
 };
 
-void *CSchemeManager::GetImage(const char *imageName, bool)
+IImage *CSchemeManager::GetImage(const char *imageName, bool)
 {
     if (!imageName || !imageName[0])
         return NULL;

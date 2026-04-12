@@ -200,7 +200,14 @@ def build(bld):
 	bld(name = 'engine_includes', export_includes = '. common common/imagelib', use = 'filesystem_includes')
 
 	libs = ['engine_includes', 'public', 'werror', 'backtrace', 'library_suffix']
-	includes = ['server', 'client', 'client/vgui', 'common/soundlib', 'platform']
+	includes = [
+		'server',
+		'client',
+		'client/vgui',
+		'common/soundlib',
+		'platform',
+		'../hl1_source_sdk/public',
+	]
 
 	# basic build: dedicated only
 	source = bld.path.ant_glob(['common/*.c', 'common/imagelib/*.c', 'common/soundlib/*.c', 'server/*.c'])
