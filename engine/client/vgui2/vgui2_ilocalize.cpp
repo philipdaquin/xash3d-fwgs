@@ -315,13 +315,13 @@ static int LoadLocalizationFile(const char* filename)
 class CLocalize : public ILocalize
 {
 public:
-    bool AddFile(void* fileSystem, const char* fileName) override
+    bool AddFile(IFileSystem* fileSystem, const char* fileName) override
     {
         if (!fileSystem || !fileName)
             return false;
         
         if (s_pFileSystem == NULL)
-            s_pFileSystem = (IFileSystem*)fileSystem;
+            s_pFileSystem = fileSystem;
         
         int result = LoadLocalizationFile(fileName);
         return (result >= 0);
@@ -536,7 +536,7 @@ public:
         }
     }
     
-    bool SaveToFile(void* fileSystem, const char* fileName) override
+    bool SaveToFile(IFileSystem* fileSystem, const char* fileName) override
     {
         return false;
     }
@@ -584,7 +584,7 @@ public:
         return "";
     }
     
-    void ReloadLocalizationFiles(void* filesystem) override
+    void ReloadLocalizationFiles(IFileSystem* filesystem) override
     {
         for (int i = 0; i < s_fileCount; i++)
         {
@@ -601,10 +601,10 @@ public:
         }
         
         if (filesystem)
-            s_pFileSystem = (IFileSystem*)filesystem;
+            s_pFileSystem = filesystem;
     }
     
-    void ConstructString(wchar_t* unicodeOutput, int unicodeBufferSizeInBytes, const char* tokenName, void* localizationVariables) override
+    void ConstructString(wchar_t* unicodeOutput, int unicodeBufferSizeInBytes, const char* tokenName, KeyValues* localizationVariables) override
     {
         wchar_t* formatStr = Find(tokenName);
         if (!formatStr)
@@ -617,7 +617,7 @@ public:
         ConstructString(unicodeOutput, unicodeBufferSizeInBytes, formatStr, 0);
     }
     
-    void ConstructString(wchar_t* unicodeOutput, int unicodeBufferSizeInBytes, unsigned long unlocalizedTextSymbol, void* localizationVariables) override
+    void ConstructString(wchar_t* unicodeOutput, int unicodeBufferSizeInBytes, unsigned long unlocalizedTextSymbol, KeyValues* localizationVariables) override
     {
         wchar_t* formatStr = GetValueByIndex(unlocalizedTextSymbol);
         if (!formatStr)

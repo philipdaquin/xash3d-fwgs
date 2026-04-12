@@ -2104,26 +2104,49 @@ void Delta_ParseTableField_GS( sizebuf_t *msg )
 	const char *s = MSG_ReadString( msg );
 	delta_info_t *dt = Delta_FindStruct( s );
 	goldsrc_delta_t null = { 0 };
+	delta_t *pField;
 	int i, num_fields;
 
 	// delta encoders it's already initialized on this machine (local game)
 	if( delta_init )
 		Delta_Shutdown();
 
+	if( !COM_CheckString( s ))
+		Host_Error( "%s: empty delta table name\n", __func__ );
+
 	if( !dt )
 		Host_Error( "%s: not initialized", __func__ );
 
 	num_fields = MSG_ReadShort( msg );
-	if( num_fields > dt->maxFields )
-		Host_Error( "%s: numFields > maxFields", __func__ );
+	if( num_fields < 0 || num_fields > dt->maxFields )
+		Host_Error( "%s: invalid field count %d for %s (max %d)\n", __func__, num_fields, dt->pName, dt->maxFields );
 
 	MSG_StartBitWriting( msg );
+
+	if( num_fields == 0 )
+	{
+		dt->numFields = 0;
+		MSG_EndBitWriting( msg );
+		return;
+	}
+
+	dt->pFields = Z_Realloc( dt->pFields, num_fields * sizeof( delta_t ));
+	pField = dt->pFields;
+	dt->numFields = 0;
 
 	for( i = 0; i < num_fields; i++ )
 	{
 		goldsrc_delta_t to;
+		const delta_field_t *pFieldInfo;
 
 		Delta_ParseGSFields( msg, &dt_goldsrc_meta, &null, &to, 0.0f );
+		to.fieldName[sizeof( to.fieldName ) - 1] = '\0';
+
+		if( MSG_CheckOverflow( msg ))
+			Host_Error( "%s: overflow while parsing %s[%d]\n", __func__, dt->pName, i );
+
+		if( !COM_CheckString( to.fieldName ))
+			Host_Error( "%s: invalid field name in %s[%d]\n", __func__, dt->pName, i );
 
 		// patch our DT_SIGNED flag
 		if( FBitSet( to.fieldType, DT_SIGNED_GS ))
@@ -2131,7 +2154,21 @@ void Delta_ParseTableField_GS( sizebuf_t *msg )
 			ClearBits( to.fieldType, DT_SIGNED_GS );
 			SetBits( to.fieldType, DT_SIGNED );
 		}
-		Delta_AddField( dt, to.fieldName, to.fieldType, to.significant_bits, to.premultiply, to.postmultiply );
+
+		pFieldInfo = Delta_FindFieldInfo( dt->pInfo, to.fieldName, dt->maxFields );
+		if( !pFieldInfo )
+			Host_Error( "%s: unknown field %s->%s\n", __func__, dt->pName, to.fieldName );
+
+		pField->name = pFieldInfo->name;
+		pField->offset = pFieldInfo->offset;
+		pField->size = pFieldInfo->size;
+		pField->flags = to.fieldType;
+		pField->bits = to.significant_bits;
+		pField->multiplier = to.premultiply;
+		pField->post_multiplier = to.postmultiply;
+		pField->bInactive = false;
+		pField++;
+		dt->numFields++;
 	}
 
 	MSG_EndBitWriting( msg );

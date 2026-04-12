@@ -144,6 +144,8 @@ wavdata_t *S_LoadSound( sfx_t *sfx )
 	// load it from disk
 	if( Q_stricmp( sfx->name, "*default" ))
 	{
+		Con_Printf( "SNDDBG: S_LoadSound name='%s'\n", sfx->name );
+
 		// load it from disk
 		if( s_warn_late_precache.value > 0 && cls.state == ca_active )
 			Con_Printf( S_WARN "%s: late precache of %s\n", __func__, sfx->name );
@@ -321,6 +323,7 @@ void S_EndRegistration( void )
 	{
 		if( !sfx->name[0] )
 			continue;
+		Con_Printf( "SNDDBG: S_EndRegistration load[%d/%d] name='%s'\n", i + 1, s_numSfx, sfx->name );
 		S_LoadSound( sfx );
 	}
 	s_registering = false;

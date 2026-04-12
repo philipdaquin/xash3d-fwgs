@@ -2192,8 +2192,28 @@ be resolved from the active game directory first.
 */
 qboolean FS_IsVGui2AssetPath( const char *path )
 {
+	size_t pathlen;
+
 	if( !COM_CheckString( path ) )
+	{
+		Con_Printf( "VGUI2FS: reject invalid path pointer\n" );
 		return false;
+	}
+
+	pathlen = Q_strlen( path );
+	if( pathlen == 0 || pathlen >= MAX_SYSPATH )
+	{
+		Con_Printf( "VGUI2FS: reject path length=%zu path='%s'\n", pathlen, path );
+		return false;
+	}
+
+	// Treat obviously unsafe or malformed names as non-VGUI assets so the
+	// caller gets a clean miss instead of spinning through special-case lookup.
+	if( path[0] == '/' || Q_strstr( path, ".." ) || Q_strpbrk( path, "\\:~" ) )
+	{
+		Con_Printf( "VGUI2FS: reject unsafe path='%s'\n", path );
+		return false;
+	}
 
 	// exact resource/ClientScheme.res
 	if( !Q_strcmp( path, "resource/ClientScheme.res" ) )
@@ -3266,12 +3286,38 @@ qboolean FS_GetFullDiskPath( char *buffer, size_t size, const char *name, qboole
 	searchpath_t *search;
 	char temp[MAX_SYSPATH];
 
+	if( !buffer || size == 0 || !COM_CheckString( name ) )
+	{
+		Con_Printf( "VGUI2FS: FS_GetFullDiskPath invalid args name='%s' size=%zu\n", name ? name : "<null>", size );
+		return false;
+	}
+
+	if( Q_strlen( name ) >= MAX_SYSPATH )
+	{
+		Con_Printf( "VGUI2FS: FS_GetFullDiskPath path too long name='%s'\n", name );
+		return false;
+	}
+
+	if( FS_IsVGui2AssetPath( name ) )
+	{
+		Con_Printf( "VGUI2FS: resolve name='%s' gamedironly=%d\n", name, gamedironly );
+	}
+
 	search = FS_FindFile( name, NULL, temp, sizeof( temp ), gamedironly );
 
 	if( search && search->type == SEARCHPATH_PLAIN )
 	{
 		Q_snprintf( buffer, size, "%s%s", search->filename, temp );
+		if( FS_IsVGui2AssetPath( name ) )
+		{
+			Con_Printf( "VGUI2FS: resolved name='%s' -> '%s'\n", name, buffer );
+		}
 		return true;
+	}
+
+	if( FS_IsVGui2AssetPath( name ) )
+	{
+		Con_Printf( "VGUI2FS: miss name='%s'\n", name );
 	}
 
 	return false;

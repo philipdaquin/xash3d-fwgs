@@ -63,6 +63,8 @@ wavdata_t *FS_LoadSound( const char *filename, const byte *buffer, size_t size )
 
 	Sound_Reset(); // clear old sounddata
 	Q_strncpy( loadname, filename, sizeof( loadname ));
+	Con_Printf( "SNDDBG: FS_LoadSound request filename='%s' ext='%s' buffer=%p size=%zu\n",
+		filename ? filename : "<null>", ext ? ext : "<null>", buffer, size );
 
 	if( COM_CheckStringEmpty( ext ))
 	{
@@ -94,10 +96,12 @@ wavdata_t *FS_LoadSound( const char *filename, const byte *buffer, size_t size )
 			string path;
 
 			Q_snprintf( path, sizeof( path ), DEFAULT_SOUNDPATH "%s.%s", loadname, format->ext );
+			Con_Printf( "SNDDBG: FS_LoadSound try path='%s'\n", path );
 
 			f = FS_LoadFile( path, &filesize, false );
 			if( f && filesize > 0 )
 			{
+				Con_Printf( "SNDDBG: FS_LoadSound hit path='%s' filesize=%lld\n", path, (long long)filesize );
 				success = format->loadfunc( path, f, filesize );
 				Mem_Free( f ); // release buffer
 			}
@@ -106,9 +110,11 @@ wavdata_t *FS_LoadSound( const char *filename, const byte *buffer, size_t size )
 				return SoundPack(); // loaded
 
 			Q_snprintf( path, sizeof( path ), "%s.%s", loadname, format->ext );
+			Con_Printf( "SNDDBG: FS_LoadSound try path='%s'\n", path );
 			f = FS_LoadFile( path, &filesize, false );
 			if( f && filesize > 0 )
 			{
+				Con_Printf( "SNDDBG: FS_LoadSound hit path='%s' filesize=%lld\n", path, (long long)filesize );
 				success = format->loadfunc( path, f, filesize );
 				Mem_Free( f ); // release buffer
 			}

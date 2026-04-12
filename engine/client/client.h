@@ -1122,8 +1122,14 @@ int Con_UtfMoveRight( char *str, int pos, int length );
 void Con_DefaultColor( int r, int g, int b, qboolean gameui );
 cl_font_t *Con_GetCurFont( void );
 cl_font_t *Con_GetFont( int num );
+#ifdef __cplusplus
+extern "C" {
+#endif
 int Con_DrawString( int x, int y, const char *string, const rgba_t setColor ); // legacy, use cl_font.c
 void GAME_EXPORT Con_DrawStringLen( const char *pText, int *length, int *height ); // legacy, use cl_font.c
+#ifdef __cplusplus
+}
+#endif
 void Con_CharEvent( int key );
 void Key_Console( int key );
 void Key_Message( int key );

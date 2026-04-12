@@ -6,6 +6,9 @@
 #include "vgui2_interfaces.h"
 #include "vgui2_host.h"
 #include "common.h"
+#include "client.h"
+
+#include "../../../3rdparty/tier1/Color.h"
 
 #define FONTFLAG_NONE         0
 #define FONTFLAG_ITALIC      0x001
@@ -23,6 +26,92 @@
 
 namespace vgui2
 {
+
+class IImage
+{
+public:
+    virtual void Paint() = 0;
+    virtual void SetPos(int x, int y) = 0;
+    virtual void GetContentSize(int &wide, int &tall) = 0;
+    virtual void GetSize(int &wide, int &tall) = 0;
+    virtual void SetSize(int wide, int tall) = 0;
+    virtual void SetColor(Color col) = 0;
+    virtual ~IImage() {}
+    virtual void SetAdditive(bool) {}
+};
+
+class CTextureImage : public IImage
+{
+public:
+    explicit CTextureImage(const char *imageName)
+    {
+        Q_strncpy(m_name, imageName ? imageName : "", sizeof(m_name) - 1);
+        m_color.SetColor(255, 255, 255, 255);
+        LoadTexture();
+    }
+
+    void Paint() override
+    {
+        if (m_textureId == 0)
+            return;
+
+        ref.dllFuncs.Color4ub((byte)m_color.r(), (byte)m_color.g(), (byte)m_color.b(), (byte)m_color.a());
+        ref.dllFuncs.R_DrawStretchPic((float)m_x, (float)m_y, (float)m_wide, (float)m_tall,
+            0.0f, 0.0f, 1.0f, 1.0f, m_textureId);
+    }
+
+    void SetPos(int x, int y) override
+    {
+        m_x = x;
+        m_y = y;
+    }
+
+    void GetContentSize(int &wide, int &tall) override
+    {
+        wide = m_wide;
+        tall = m_tall;
+    }
+
+    void GetSize(int &wide, int &tall) override
+    {
+        wide = m_wide;
+        tall = m_tall;
+    }
+
+    void SetSize(int wide, int tall) override
+    {
+        m_wide = wide;
+        m_tall = tall;
+    }
+
+    void SetColor(Color col) override
+    {
+        m_color = col;
+    }
+
+private:
+    void LoadTexture()
+    {
+        if (!m_name[0])
+            return;
+
+        m_textureId = ref.dllFuncs.GL_LoadTexture(m_name, NULL, 0, TF_IMAGE | TF_NOMIPMAP);
+        if (m_textureId == 0)
+        {
+            char withTga[160];
+            Q_snprintf(withTga, sizeof(withTga), "%s.tga", m_name);
+            m_textureId = ref.dllFuncs.GL_LoadTexture(withTga, NULL, 0, TF_IMAGE | TF_NOMIPMAP);
+        }
+    }
+
+    char m_name[128] = "";
+    int m_textureId = 0;
+    int m_x = 0;
+    int m_y = 0;
+    int m_wide = 64;
+    int m_tall = 64;
+    Color m_color;
+};
 
 struct FontEntry_t
 {
@@ -43,9 +132,9 @@ class CScheme : public IScheme
 {
 public:
     const char *GetResourceString(const char *stringName) override { return ""; }
-    void *GetBorder(const char *borderName) override { return NULL; }
+    IBorder *GetBorder(const char *borderName) override { return NULL; }
     HFont GetFont(const char *fontName, bool proportional) override;
-    int GetColor(const char *colorName, int defaultColor) override;
+    Color GetColor(const char *colorName, Color defaultColor) override;
     HFont GetFontEx(const char *fontName, bool proportional, bool hdProportional) override
         { return GetFont(fontName, proportional); }
 
@@ -66,14 +155,14 @@ HFont CScheme::GetFont(const char *fontName, bool /*proportional*/)
     return INVALID_HFONT;
 }
 
-int CScheme::GetColor(const char *colorName, int defaultColor)
+Color CScheme::GetColor(const char *colorName, Color defaultColor)
 {
     for( int i = 0; i < m_nColors; i++ )
     {
         if( !Q_strcmp(m_Colors[i].name, colorName) )
         {
             ColorEntry_t &c = m_Colors[i];
-            return (c.a << 24) | (c.r << 16) | (c.g << 8) | c.b;
+            return Color( c.r, c.g, c.b, c.a );
         }
     }
     return defaultColor;
@@ -150,7 +239,7 @@ public:
     void ReloadSchemes() override {}
     HScheme GetDefaultScheme() override { return m_defaultScheme; }
     HScheme GetScheme(const char *tag) override;
-    void *GetImage(const char *, bool) override { return NULL; }
+    IImage *GetImage(const char *imageName, bool hardwareFiltered) override;
     HTexture GetImageID(const char *, bool) override { return 0; }
     IScheme *GetIScheme(HScheme scheme) override;
     void Shutdown(bool) override {}
@@ -169,7 +258,34 @@ private:
     HScheme m_defaultScheme = 0;
     HFont m_nextFontHandle = 1;
     char m_schemeTags[8][MAX_QPATH];
+    CTextureImage *m_Images[64] = {};
+    char m_ImageNames[64][MAX_QPATH] = {};
 };
+
+IImage *CSchemeManager::GetImage(const char *imageName, bool)
+{
+    if (!imageName || !imageName[0])
+        return NULL;
+
+    for (int i = 0; i < ARRAYSIZE(m_Images); ++i)
+    {
+        if (m_Images[i] && !Q_strcmp(m_ImageNames[i], imageName))
+            return m_Images[i];
+    }
+
+    for (int i = 0; i < ARRAYSIZE(m_Images); ++i)
+    {
+        if (!m_Images[i])
+        {
+            m_Images[i] = new CTextureImage(imageName);
+            Q_strncpy(m_ImageNames[i], imageName, sizeof(m_ImageNames[i]) - 1);
+            return m_Images[i];
+        }
+    }
+
+    Con_Reportf("VGUI2: GetImage cache full for '%s'\n", imageName);
+    return NULL;
+}
 
 HFont CSchemeManager::AddFont(ISurface *surface, const char *fontName, int tall, int weight, int flags)
 {

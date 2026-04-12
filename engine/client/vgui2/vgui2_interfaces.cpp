@@ -6,6 +6,13 @@
 #include "common.h"
 #include "client.h"
 #include "ref_common.h"
+#include "VFileSystem009.h"
+
+#include "../../../3rdparty/tier1/Color.h"
+#include <stdlib.h>
+#include <string.h>
+#include <string>
+#include <vector>
 
 #define CONPRINTF(...) Con_Reportf(__VA_ARGS__)
 
@@ -14,8 +21,54 @@
 namespace vgui2
 {
 
-#define MAX_PANELS 256
+class KeyValues;
+
+typedef int HKeySymbol;
+
+class IKeyValues : public IBaseInterface
+{
+public:
+    virtual void RegisterSizeofKeyValues( int size ) = 0;
+    virtual void *AllocKeyValuesMemory( int size ) = 0;
+    virtual void FreeKeyValuesMemory( void *pMem ) = 0;
+    virtual HKeySymbol GetSymbolForString( const char *name ) = 0;
+    virtual const char *GetStringForSymbol( HKeySymbol symbol ) = 0;
+    virtual void GetLocalizedFromANSI( const char* ansi, wchar_t* outBuf, int unicodeBufferSizeInBytes ) = 0;
+    virtual void GetANSIFromLocalized( const wchar_t* unicode, char* outBuf, int ansiBufferSizeInBytes ) = 0;
+    virtual void AddKeyValuesToMemoryLeakList( void *pMem, HKeySymbol name ) = 0;
+    virtual void RemoveKeyValuesFromMemoryLeakList( void *pMem ) = 0;
+};
+
+extern ILocalize *GetLocalizeImpl();
+extern void SetLocalizeFileSystemImpl(IFileSystem *pFileSystem);
+
+#define MAX_PANELS 1024
 #define MAX_CHILDREN 32
+#define MAX_VGUI2_FONTS 128
+#define MAX_VGUI2_TEXTURES 256
+
+struct FontData_t
+{
+    bool valid;
+    int tall;
+    int weight;
+    int blur;
+    int scanlines;
+    int flags;
+    int lowRange;
+    int highRange;
+    int charWidth;
+    char name[64];
+};
+
+struct TextureData_t
+{
+    bool valid;
+    int glTexnum;
+    int wide;
+    int tall;
+    char name[128];
+};
 
 struct PanelData_t
 {
@@ -28,16 +81,111 @@ struct PanelData_t
     bool enabled;
     bool popup;
     bool needsSolve;
+    bool keyboardInputEnabled;
+    bool mouseInputEnabled;
     VPANEL parent;
     VPANEL children[MAX_CHILDREN];
     int childCount;
+    vgui2::IClientPanel *clientPanel;
 };
 
 static PanelData_t s_panelData[MAX_PANELS];
-static unsigned int s_panelCount = 1;
+static unsigned int s_panelCount = 0;
 static int s_currentClip[4] = { 0, 0, 99999, 99999 };
 static int s_clipStack[32][4];
 static int s_clipStackDepth = 0;
+static VPANEL s_embeddedPanel = 0;
+static FontData_t s_fontData[MAX_VGUI2_FONTS];
+static TextureData_t s_textureData[MAX_VGUI2_TEXTURES];
+static int s_nextTextureId = 1;
+static const char *KEYVALUES_INTERFACE_VERSION = "KeyValues003";
+
+static IFileSystem *GetVFileSystem()
+{
+    return (IFileSystem *)FS_GetNativeObject(FILESYSTEM_INTERFACE_VERSION);
+}
+
+class CKeyValuesStub : public IKeyValues
+{
+public:
+    void RegisterSizeofKeyValues( int size ) override
+    {
+        m_keyValueSize = size;
+        Con_Reportf( "VGUI2: KeyValues RegisterSizeofKeyValues(%d)\n", size );
+    }
+
+    void *AllocKeyValuesMemory( int size ) override
+    {
+        if( size <= 0 )
+            size = m_keyValueSize > 0 ? m_keyValueSize : 1;
+        return malloc( (size_t)size );
+    }
+
+    void FreeKeyValuesMemory( void *pMem ) override
+    {
+        free( pMem );
+    }
+
+    HKeySymbol GetSymbolForString( const char *name ) override
+    {
+        const std::string key = name ? name : "";
+        for( size_t i = 0; i < m_symbols.size(); ++i )
+        {
+            if( m_symbols[i] == key )
+                return (HKeySymbol)( i + 1 );
+        }
+
+        m_symbols.push_back( key );
+        return (HKeySymbol)m_symbols.size();
+    }
+
+    const char *GetStringForSymbol( HKeySymbol symbol ) override
+    {
+        const int index = symbol - 1;
+        if( index < 0 || index >= (int)m_symbols.size() )
+            return "";
+        return m_symbols[index].c_str();
+    }
+
+    void GetLocalizedFromANSI( const char* ansi, wchar_t* outBuf, int unicodeBufferSizeInBytes ) override
+    {
+        if( !outBuf || unicodeBufferSizeInBytes <= 0 )
+            return;
+
+        const int wcharCount = unicodeBufferSizeInBytes / (int)sizeof( wchar_t );
+        if( wcharCount <= 0 )
+            return;
+
+        int i = 0;
+        if( ansi )
+        {
+            for( ; i < wcharCount - 1 && ansi[i]; ++i )
+                outBuf[i] = (unsigned char)ansi[i];
+        }
+        outBuf[i] = L'\0';
+    }
+
+    void GetANSIFromLocalized( const wchar_t* unicode, char* outBuf, int ansiBufferSizeInBytes ) override
+    {
+        if( !outBuf || ansiBufferSizeInBytes <= 0 )
+            return;
+
+        int i = 0;
+        if( unicode )
+        {
+            for( ; i < ansiBufferSizeInBytes - 1 && unicode[i]; ++i )
+                outBuf[i] = ( unicode[i] >= 0 && unicode[i] <= 0x7f ) ? (char)unicode[i] : '?';
+        }
+        outBuf[i] = '\0';
+    }
+
+    void AddKeyValuesToMemoryLeakList( void *, HKeySymbol ) override {}
+    void RemoveKeyValuesFromMemoryLeakList( void * ) override {}
+
+private:
+    int m_keyValueSize = 0;
+    std::vector<std::string> m_symbols;
+};
 
 static inline PanelData_t *GetPanelData(VPANEL panel)
 {
@@ -107,14 +255,22 @@ public:
     {
     }
     
-    VPANEL AllocPanel() override
-    {
-        static unsigned int panelCounter = 1;
-        return (VPANEL)(panelCounter++);
-    }
+	VPANEL AllocPanel() override
+	{
+		VPANEL result = CreatePanel();
+		Con_Reportf("AllocPanel -> %u count=%u\n", result, s_panelCount);
+		return result;
+	}
     
-    void FreePanel(VPANEL) override
+    void FreePanel(VPANEL panel) override
     {
+        PanelData_t *p = GetPanelData(panel);
+        if (!p)
+            return;
+
+        memset(p, 0, sizeof(*p));
+        if (s_embeddedPanel == panel)
+            s_embeddedPanel = 0;
     }
     
     void DPrintf(const char *format, ...) override
@@ -187,7 +343,7 @@ public:
 class CPanelReal : public IPanel
 {
 public:
-    void Init(VPANEL vguiPanel, void *) override
+    void Init(VPANEL vguiPanel, IClientPanel *panel) override
     {
         PanelData_t *p = GetPanelData(vguiPanel);
         if (!p) return;
@@ -195,7 +351,10 @@ public:
         p->size[0] = p->size[1] = 64;
         p->visible = true;
         p->enabled = true;
+        p->keyboardInputEnabled = false;
+        p->mouseInputEnabled = false;
         p->needsSolve = true;
+        p->clientPanel = panel;
     }
     
     void SetPos(VPANEL vguiPanel, int x, int y) override
@@ -221,6 +380,8 @@ public:
         if (!p) return;
         p->size[0] = wide;
         p->size[1] = tall;
+        if (p->clientPanel)
+            p->clientPanel->OnSizeChanged(wide, tall);
     }
     
     void GetSize(VPANEL vguiPanel, int &wide, int &tall) override
@@ -339,6 +500,9 @@ public:
             if (newP && newP->childCount < MAX_CHILDREN)
             {
                 newP->children[newP->childCount++] = vguiPanel;
+                // TEMPORARY ISOLATION:
+                // Avoid synchronous engine->client child-added callbacks during SetParent
+                // while we verify whether panel construction is hanging on this boundary.
             }
         }
     }
@@ -397,14 +561,49 @@ public:
     
     bool Render_GetPopupVisible( VPANEL ) override { return true; }
     void Render_SetPopupVisible( VPANEL, bool ) override {}
-    HScheme GetScheme(VPANEL) override { return 0; }
-    bool IsProportional(VPANEL) override { return false; }
-    bool IsAutoDeleteSet(VPANEL) override { return false; }
-    void DeletePanel(VPANEL) override {}
-    void SetKeyBoardInputEnabled(VPANEL, bool) override {}
-    void SetMouseInputEnabled(VPANEL, bool) override {}
-    bool IsKeyBoardInputEnabled(VPANEL) override { return false; }
-    bool IsMouseInputEnabled(VPANEL) override { return false; }
+    HScheme GetScheme(VPANEL vguiPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        return (p && p->clientPanel) ? p->clientPanel->GetScheme() : 0;
+    }
+    bool IsProportional(VPANEL vguiPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        return (p && p->clientPanel) ? p->clientPanel->IsProportional() : false;
+    }
+    bool IsAutoDeleteSet(VPANEL vguiPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        return (p && p->clientPanel) ? p->clientPanel->IsAutoDeleteSet() : false;
+    }
+    void DeletePanel(VPANEL vguiPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (p && p->clientPanel)
+            p->clientPanel->DeletePanel();
+    }
+    void SetKeyBoardInputEnabled(VPANEL vguiPanel, bool state) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) return;
+        p->keyboardInputEnabled = state;
+    }
+    void SetMouseInputEnabled(VPANEL vguiPanel, bool state) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p) return;
+        p->mouseInputEnabled = state;
+    }
+    bool IsKeyBoardInputEnabled(VPANEL vguiPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        return p ? p->keyboardInputEnabled : false;
+    }
+    bool IsMouseInputEnabled(VPANEL vguiPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        return p ? p->mouseInputEnabled : false;
+    }
     
     void Solve(VPANEL vguiPanel) override
     {
@@ -427,26 +626,110 @@ public:
         p->needsSolve = false;
     }
     
-    const char *GetName(VPANEL) override { return ""; }
-    const char *GetClassName(VPANEL) override { return ""; }
-    void SendMessage(VPANEL, KeyValues *, VPANEL) override {}
-    void Think(VPANEL) override {}
-    void PerformApplySchemeSettings(VPANEL) override {}
-    void PaintTraverse(VPANEL, bool, bool) override {}
-    void Repaint(VPANEL) override {}
+    const char *GetName(VPANEL vguiPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        return (p && p->clientPanel) ? p->clientPanel->GetName() : "";
+    }
+    const char *GetClassName(VPANEL vguiPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        return (p && p->clientPanel) ? p->clientPanel->GetClassName() : "";
+    }
+    void SendMessage(VPANEL vguiPanel, KeyValues *params, VPANEL ifromPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (p && p->clientPanel)
+            p->clientPanel->OnMessage(params, ifromPanel);
+    }
+    void Think(VPANEL vguiPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (p && p->clientPanel)
+            p->clientPanel->Think();
+    }
+    void PerformApplySchemeSettings(VPANEL vguiPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (p && p->clientPanel)
+            p->clientPanel->PerformApplySchemeSettings();
+    }
+    void PaintTraverse(VPANEL vguiPanel, bool forceRepaint, bool allowForce) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (p && p->clientPanel)
+            p->clientPanel->PaintTraverse(forceRepaint, allowForce);
+    }
+    void Repaint(VPANEL vguiPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (p && p->clientPanel)
+            p->clientPanel->Repaint();
+    }
     VPANEL IsWithinTraverse(VPANEL, int, int, bool) override { return INVALID_PANEL; }
-    void OnChildAdded(VPANEL, VPANEL) override {}
-    void OnSizeChanged(VPANEL, int, int) override {}
-    void InternalFocusChanged(VPANEL, bool) override {}
-    bool RequestInfo(VPANEL, KeyValues *) override { return false; }
-    void RequestFocus(VPANEL, int) override {}
-    bool RequestFocusPrev(VPANEL, VPANEL) override { return false; }
-    bool RequestFocusNext(VPANEL, VPANEL) override { return false; }
-    VPANEL GetCurrentKeyFocus(VPANEL) override { return INVALID_PANEL; }
-    int GetTabPosition(VPANEL) override { return 0; }
-    void *Plat(VPANEL) override { return NULL; }
-    void SetPlat(VPANEL, void *) override {}
-    void *GetPanel(VPANEL, const char *) override { return NULL; }
+    void OnChildAdded(VPANEL vguiPanel, VPANEL child) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (p && p->clientPanel)
+            p->clientPanel->OnChildAdded(child);
+    }
+    void OnSizeChanged(VPANEL vguiPanel, int newWide, int newTall) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (p && p->clientPanel)
+            p->clientPanel->OnSizeChanged(newWide, newTall);
+    }
+    void InternalFocusChanged(VPANEL vguiPanel, bool lost) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (p && p->clientPanel)
+            p->clientPanel->InternalFocusChanged(lost);
+    }
+    bool RequestInfo(VPANEL vguiPanel, KeyValues *outputData) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        return (p && p->clientPanel) ? p->clientPanel->RequestInfo(outputData) : false;
+    }
+    void RequestFocus(VPANEL vguiPanel, int direction) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (p && p->clientPanel)
+            p->clientPanel->RequestFocus(direction);
+    }
+    bool RequestFocusPrev(VPANEL vguiPanel, VPANEL existingPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        return (p && p->clientPanel) ? p->clientPanel->RequestFocusPrev(existingPanel) : false;
+    }
+    bool RequestFocusNext(VPANEL vguiPanel, VPANEL existingPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        return (p && p->clientPanel) ? p->clientPanel->RequestFocusNext(existingPanel) : false;
+    }
+    VPANEL GetCurrentKeyFocus(VPANEL vguiPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        return (p && p->clientPanel) ? p->clientPanel->GetCurrentKeyFocus() : INVALID_PANEL;
+    }
+    int GetTabPosition(VPANEL vguiPanel) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        return (p && p->clientPanel) ? p->clientPanel->GetTabPosition() : 0;
+    }
+    SurfacePlat *Plat(VPANEL) override { return NULL; }
+    void SetPlat(VPANEL, SurfacePlat *) override {}
+    Panel *GetPanel(VPANEL vguiPanel, const char *destinationModule) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        if (!p || !p->clientPanel)
+            return NULL;
+
+        const char *moduleName = p->clientPanel->GetModuleName();
+        if (destinationModule && destinationModule[0] && moduleName && moduleName[0] && Q_stricmp(destinationModule, moduleName))
+            return NULL;
+
+        return (Panel *)p->clientPanel->GetPanel();
+    }
     bool IsEnabled(VPANEL vguiPanel) override
     {
         PanelData_t *p = GetPanelData(vguiPanel);
@@ -459,18 +742,29 @@ public:
         if (!p) return;
         p->enabled = state;
     }
-    void *Client( VPANEL ) override { return NULL; }
-    const char* GetModuleName( VPANEL ) override { return ""; }
+    IClientPanel *Client( VPANEL vguiPanel ) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        return p ? p->clientPanel : NULL;
+    }
+    const char* GetModuleName( VPANEL vguiPanel ) override
+    {
+        PanelData_t *p = GetPanelData(vguiPanel);
+        return (p && p->clientPanel) ? p->clientPanel->GetModuleName() : "";
+    }
 };
 
 // ISurface real implementation
 class CSurfaceReal : public ISurface
 {
 public:
+    // Remaining non-blocking stubs are kept explicit here on purpose:
+    // popup/window management, browser integration, advanced cursor/focus handling,
+    // and texture update helpers below are still minimal until the client needs them.
     void Shutdown() override {}
     void RunFrame() override {}
-    VPANEL GetEmbeddedPanel() override { return (VPANEL)1; }
-    void SetEmbeddedPanel( VPANEL ) override {}
+    VPANEL GetEmbeddedPanel() override { return s_embeddedPanel; }
+    void SetEmbeddedPanel( VPANEL panel ) override { s_embeddedPanel = panel; }
     
     void PushMakeCurrent(VPANEL panel, bool useInsets) override
     {
@@ -534,6 +828,7 @@ public:
         m_color[2] = b;
         m_color[3] = a;
     }
+    void DrawSetColor(Color) override {}
     
     void DrawFilledRect(int x0, int y0, int x1, int y1) override
     {
@@ -579,20 +874,126 @@ public:
     void DrawOutlinedRect(int x0, int y0, int x1, int y1) override {}
     void DrawLine(int, int, int, int) override {}
     void DrawPolyLine(int *, int *, int) override {}
-    void DrawSetTextFont(HFont) override {}
-    void DrawSetTextColor(int, int, int, int) override {}
-    void DrawSetTextPos(int, int) override {}
-    void DrawGetTextPos(int& x,int& y) override { x = 0; y = 0; }
-    void DrawPrintText(const wchar_t *, int) override {}
-    void DrawUnicodeChar(wchar_t) override {}
+    void DrawSetTextFont(HFont font) override { m_textFont = font; }
+    void DrawSetTextColor(int r, int g, int b, int a) override
+    {
+        m_textColor[0] = r;
+        m_textColor[1] = g;
+        m_textColor[2] = b;
+        m_textColor[3] = a;
+    }
+    void DrawSetTextColor(Color) override {}
+    void DrawSetTextPos(int x, int y) override
+    {
+        m_textPos[0] = x;
+        m_textPos[1] = y;
+    }
+    void DrawGetTextPos(int& x,int& y) override
+    {
+        x = m_textPos[0];
+        y = m_textPos[1];
+    }
+    void DrawPrintText(const wchar_t *text, int textLen) override
+    {
+        if (!text || textLen <= 0)
+            return;
+
+        char ansi[2048];
+        int len = 0;
+        for (int i = 0; i < textLen && len < (int)sizeof(ansi) - 1; ++i)
+        {
+            wchar_t ch = text[i];
+            if (ch == L'\0')
+                break;
+            ansi[len++] = (ch >= 32 && ch < 127) ? (char)ch : '?';
+        }
+        ansi[len] = '\0';
+
+        rgba_t color = {
+            (byte)m_textColor[0],
+            (byte)m_textColor[1],
+            (byte)m_textColor[2],
+            (byte)m_textColor[3]
+        };
+
+        m_textPos[0] = Con_DrawString(m_textPos[0], m_textPos[1], ansi, color);
+    }
+    void DrawUnicodeChar(wchar_t ch) override
+    {
+        wchar_t text[2] = { ch, 0 };
+        DrawPrintText(text, 1);
+    }
+    void DrawUnicodeCharAdd( wchar_t ch ) override
+    {
+        DrawUnicodeChar( ch );
+    }
     void DrawFlushText() override {}
-    void DrawSetTextureFile(int, const char *, int, bool) override {}
-    void DrawSetTextureRGBA(int, const unsigned char *, int, int, int, bool) override {}
-    void DrawSetTexture(int) override {}
-    void DrawGetTextureSize(int, int &, int &) override {}
-    void DrawTexturedRect(int, int, int, int) override {}
-    bool IsTextureIDValid(int) override { return false; }
-    int CreateNewTextureID( bool ) override { return 0; }
+    IHTML *CreateHTMLWindow(vgui2::IHTMLEvents *, VPANEL) override { return NULL; }
+    void PaintHTMLWindow(vgui2::IHTML *) override {}
+    void DeleteHTMLWindow(IHTML *) override {}
+    void DrawSetTextureFile(int id, const char *filename, int, bool) override
+    {
+        if (id <= 0 || id >= MAX_VGUI2_TEXTURES || !filename || !filename[0])
+            return;
+
+        TextureData_t &tex = s_textureData[id];
+        if (!tex.valid || Q_strcmp(tex.name, filename))
+        {
+            Q_strncpy(tex.name, filename, sizeof(tex.name) - 1);
+            tex.glTexnum = ref.dllFuncs.GL_LoadTexture(filename, NULL, 0, TF_IMAGE | TF_NOMIPMAP);
+            tex.wide = 0;
+            tex.tall = 0;
+            tex.valid = (tex.glTexnum != 0);
+        }
+    }
+    void DrawSetTextureRGBA(int id, const unsigned char *rgba, int wide, int tall, int, bool) override
+    {
+        if (id <= 0 || id >= MAX_VGUI2_TEXTURES || !rgba || wide <= 0 || tall <= 0)
+            return;
+
+        TextureData_t &tex = s_textureData[id];
+        Q_snprintf(tex.name, sizeof(tex.name), "*vgui2_%d", id);
+        tex.glTexnum = ref.dllFuncs.GL_CreateTexture(tex.name, wide, tall, rgba, (texFlags_t)(TF_IMAGE | TF_NOMIPMAP));
+        tex.wide = wide;
+        tex.tall = tall;
+        tex.valid = (tex.glTexnum != 0);
+    }
+    void DrawSetTexture(int id) override { m_boundTexture = id; }
+    void DrawGetTextureSize(int id, int &wide, int &tall) override
+    {
+        if (id > 0 && id < MAX_VGUI2_TEXTURES && s_textureData[id].valid)
+        {
+            wide = s_textureData[id].wide;
+            tall = s_textureData[id].tall;
+            return;
+        }
+
+        wide = 0;
+        tall = 0;
+    }
+    void DrawTexturedRect(int x0, int y0, int x1, int y1) override
+    {
+        if (m_boundTexture <= 0 || m_boundTexture >= MAX_VGUI2_TEXTURES)
+            return;
+
+        TextureData_t &tex = s_textureData[m_boundTexture];
+        if (!tex.valid || tex.glTexnum == 0)
+            return;
+
+        ref.dllFuncs.Color4ub((byte)m_color[0], (byte)m_color[1], (byte)m_color[2], (byte)m_color[3]);
+        ref.dllFuncs.R_DrawStretchPic((float)x0, (float)y0, (float)(x1 - x0), (float)(y1 - y0),
+            0.0f, 0.0f, 1.0f, 1.0f, tex.glTexnum);
+    }
+    bool IsTextureIDValid(int id) override
+    {
+        return id > 0 && id < MAX_VGUI2_TEXTURES && s_textureData[id].valid;
+    }
+    int CreateNewTextureID( bool ) override
+    {
+        if (s_nextTextureId >= MAX_VGUI2_TEXTURES)
+            return 0;
+        return s_nextTextureId++;
+    }
     void GetScreenSize(int &wide, int &tall) override 
     { 
         wide = refState.width; 
@@ -615,7 +1016,7 @@ public:
     void ApplyChanges() override {}
     bool IsWithin(int, int) override { return false; }
     bool HasFocus() override { return false; }
-    bool SupportsFeature(int) override { return false; }
+    bool SupportsFeature(SurfaceFeature_e) override { return false; }
     void RestrictPaintToSinglePanel(VPANEL) override {}
     void SetModalPanel(VPANEL) override {}
     VPANEL GetModalPanel() override { return INVALID_PANEL; }
@@ -624,13 +1025,76 @@ public:
     void SetTranslateExtendedKeys(bool) override {}
     VPANEL GetTopmostPopup() override { return INVALID_PANEL; }
     void SetTopLevelFocus(VPANEL) override {}
-    HFont CreateFont() override { return INVALID_HFONT; }
-    bool AddGlyphSetToFont(HFont, const char *, int, int, int, int, int, int, int) override { return false; }
-    bool AddCustomFontFile(const char *) override { return false; }
-    int GetFontTall(HFont) override { return 0; }
-    void GetCharABCwide(HFont, int, int &, int &, int &) override {}
-    int GetCharacterWidth(HFont, int) override { return 0; }
-    void GetTextSize(HFont, const wchar_t *, int &, int &) override {}
+    HFont CreateFont() override
+    {
+        for (int i = 1; i < MAX_VGUI2_FONTS; ++i)
+        {
+            if (!s_fontData[i].valid)
+            {
+                memset(&s_fontData[i], 0, sizeof(s_fontData[i]));
+                s_fontData[i].valid = true;
+                s_fontData[i].tall = 12;
+                s_fontData[i].charWidth = 8;
+                return (HFont)i;
+            }
+        }
+        return INVALID_HFONT;
+    }
+    bool AddGlyphSetToFont(HFont font, const char *windowsFontName, int tall, int weight, int blur, int scanlines, int flags, int lowRange, int highRange) override
+    {
+        if (font <= 0 || font >= MAX_VGUI2_FONTS)
+            return false;
+
+        FontData_t &fontData = s_fontData[font];
+        if (!fontData.valid)
+            return false;
+
+        Q_strncpy(fontData.name, windowsFontName ? windowsFontName : "Default", sizeof(fontData.name) - 1);
+        fontData.tall = tall > 0 ? tall : 12;
+        fontData.weight = weight;
+        fontData.blur = blur;
+        fontData.scanlines = scanlines;
+        fontData.flags = flags;
+        fontData.lowRange = lowRange;
+        fontData.highRange = highRange;
+        fontData.charWidth = Q_max(4, fontData.tall / 2);
+        return true;
+    }
+    bool AddCustomFontFile(const char *) override { return true; }
+    int GetFontTall(HFont font) override
+    {
+        if (font > 0 && font < MAX_VGUI2_FONTS && s_fontData[font].valid)
+            return s_fontData[font].tall;
+        return 12;
+    }
+    void GetCharABCwide(HFont font, int, int &a, int &b, int &c) override
+    {
+        a = 0;
+        b = GetCharacterWidth(font, 0);
+        c = 0;
+    }
+    int GetCharacterWidth(HFont font, int) override
+    {
+        if (font > 0 && font < MAX_VGUI2_FONTS && s_fontData[font].valid)
+            return s_fontData[font].charWidth;
+        return 8;
+    }
+    void GetTextSize(HFont font, const wchar_t *text, int &wide, int &tall) override
+    {
+        if (!text)
+        {
+            wide = 0;
+            tall = GetFontTall(font);
+            return;
+        }
+
+        int len = 0;
+        while (text[len] != 0)
+            ++len;
+
+        wide = len * GetCharacterWidth(font, 0);
+        tall = GetFontTall(font);
+    }
     VPANEL GetNotifyPanel() override { return INVALID_PANEL; }
     void SetNotifyIcon(VPANEL, HTexture, VPANEL, const char *) override {}
     void PlaySound(const char *) override {}
@@ -663,17 +1127,17 @@ public:
     bool HasCursorPosFunctions() override { return false; }
     void SurfaceGetCursorPos(int &x, int &y) override { x = y = 0; }
     void SurfaceSetCursorPos(int, int) override {}
-    void DrawTexturedPolygon(void *, int) override {}
-    int GetFontAscent( HFont, wchar_t ) override { return 0; }
+    void DrawTexturedPolygon(VGuiVertex *, int) override {}
+    int GetFontAscent( HFont font, wchar_t ) override { return Q_max(0, GetFontTall(font) - 2); }
     void SetAllowHTMLJavaScript( bool ) override {}
     void SetLanguage( const char* ) override {}
     const char* GetLanguage() override { return "english"; }
     bool DeleteTextureByID( int ) override { return false; }
     void DrawUpdateRegionTextureBGRA( int, int, int, const unsigned char *, int, int ) override {}
     void DrawSetTextureBGRA( int, const unsigned char *, int, int ) override {}
-    void CreateBrowser( vgui2::VPANEL, void *, bool, const char * ) override {}
-    void RemoveBrowser( vgui2::VPANEL, void * ) override {}
-    void *AccessChromeHTMLController() override { return NULL; }
+    void CreateBrowser( vgui2::VPANEL, IHTMLResponses *, bool, const char * ) override {}
+    void RemoveBrowser( vgui2::VPANEL, IHTMLResponses * ) override {}
+    IHTMLChromeController *AccessChromeHTMLController() override { return NULL; }
     void DrawTexturedRectAdd(int, int, int, int) override {}
     void SetSupportsEsc(bool) override {}
     int GetFontBlur(vgui2::HFont) override { return 0; }
@@ -684,6 +1148,10 @@ public:
 
 private:
     int m_color[4] = {255, 255, 255, 255};
+    int m_textColor[4] = {255, 255, 255, 255};
+    int m_textPos[2] = {0, 0};
+    HFont m_textFont = INVALID_HFONT;
+    int m_boundTexture = 0;
     
     bool IsPanelVisible(VPANEL panel)
     {
@@ -770,11 +1238,37 @@ private:
 };
 
 static CSurfaceReal s_TheSurface;
+static CKeyValuesStub s_IKeyValues;
 
 // IInputInternal stub implementation
 class CInputInternalStub : public IInputInternal
 {
 public:
+    void SetMouseFocus(VPANEL) override {}
+    void SetMouseCapture(VPANEL) override {}
+    void GetKeyCodeText(int, char *buf, int buflen) override
+    {
+        if (buf && buflen > 0)
+            buf[0] = '\0';
+    }
+    VPANEL GetFocus() override { return INVALID_PANEL; }
+    VPANEL GetMouseOver() override { return INVALID_PANEL; }
+    void SetCursorPos(int, int) override {}
+    void GetCursorPos(int &x, int &y) override { x = 0; y = 0; }
+    bool WasMousePressed(int) override { return false; }
+    bool WasMouseDoublePressed(int) override { return false; }
+    bool IsMouseDown(int) override { return false; }
+    void SetCursorOveride(HCursor) override {}
+    HCursor GetCursorOveride() override { return 0; }
+    bool WasMouseReleased(int) override { return false; }
+    bool WasKeyPressed(int) override { return false; }
+    bool IsKeyDown(int) override { return false; }
+    bool WasKeyTyped(int) override { return false; }
+    bool WasKeyReleased(int) override { return false; }
+    VPANEL GetAppModalSurface() override { return INVALID_PANEL; }
+    void SetAppModalSurface(VPANEL) override {}
+    void ReleaseAppModalSurface() override {}
+    void GetCursorPosition(int &x, int &y) override { x = 0; y = 0; }
     void RunFrame() override {}
     void UpdateMouseFocus(int, int) override {}
     void PanelDeleted(VPANEL) override {}
@@ -801,9 +1295,9 @@ class CSchemeStub : public IScheme
 {
 public:
     const char *GetResourceString(const char *) override { return ""; }
-    void *GetBorder(const char *) override { return NULL; }
+    IBorder *GetBorder(const char *) override { return NULL; }
     HFont GetFont(const char *, bool) override { return INVALID_HFONT; }
-    int GetColor(const char *, int defaultColor) override { return defaultColor; }
+    Color GetColor(const char *, Color defaultColor) override { return defaultColor; }
     vgui2::HFont GetFontEx(const char *, bool, bool) override { return INVALID_HFONT; }
 };
 
@@ -815,7 +1309,7 @@ public:
     void ReloadSchemes() override {}
     HScheme GetDefaultScheme() override { return 0; }
     HScheme GetScheme( const char * ) override { return 0; }
-    void *GetImage( const char *, bool ) override { return NULL; }
+    IImage *GetImage( const char *, bool ) override { return NULL; }
     HTexture GetImageID( const char *, bool ) override { return 0; }
     IScheme *GetIScheme( HScheme ) override { return &m_Scheme; }
     void Shutdown( bool ) override {}
@@ -833,7 +1327,7 @@ private:
 class CLocalizeStub : public ILocalize
 {
 public:
-    bool AddFile( void *, const char *) override { return true; }
+    bool AddFile( IFileSystem *, const char *) override { return true; }
     void RemoveAll() override {}
     wchar_t *Find(char const *) override { return NULL; }
     int ConvertANSIToUnicode(const char *, wchar_t *, int) override { return 0; }
@@ -846,13 +1340,13 @@ public:
     unsigned long GetNextStringIndex(unsigned long) override { return 0; }
     void AddString(const char *, wchar_t *, const char *) override {}
     void SetValueByIndex(unsigned long, wchar_t *) override {}
-    bool SaveToFile(void *, const char *) override { return false; }
+    bool SaveToFile(IFileSystem *, const char *) override { return false; }
     int GetLocalizationFileCount() override { return 0; }
     const char *GetLocalizationFileName(int) override { return ""; }
     const char *GetFileNameByIndex(unsigned long) override { return ""; }
-    void ReloadLocalizationFiles(void *) override {}
-    void ConstructString(wchar_t *, int, const char *, void *) override {}
-    void ConstructString(wchar_t *, int, unsigned long, void *) override {}
+    void ReloadLocalizationFiles(IFileSystem *) override {}
+    void ConstructString(wchar_t *, int, const char *, KeyValues *) override {}
+    void ConstructString(wchar_t *, int, unsigned long, KeyValues *) override {}
 };
 
 // ISystem stub implementation
@@ -874,7 +1368,7 @@ public:
     bool GetRegistryString(const char *, char *, int) override { return false; }
     bool SetRegistryInteger(const char *, int) override { return false; }
     bool GetRegistryInteger(const char *, int &) override { return false; }
-    void *GetUserConfigFileData(const char *, int) override { return NULL; }
+    KeyValues *GetUserConfigFileData(const char *, int) override { return NULL; }
     void SetUserConfigFile(const char *, const char *) override {}
     void SaveUserConfigFile() override {}
     bool SetWatchForComputerUse(bool) override { return false; }
@@ -921,8 +1415,9 @@ void CVGui2Interfaces::Init()
     m_pISurface = &vgui2::s_ISurface;
     m_pIInputInternal = &vgui2::s_IInputInternal;
     m_pISchemeManager = vgui2::GetSchemeManager();
-    m_pILocalize = &vgui2::s_ILocalize;
+    m_pILocalize = vgui2::GetLocalizeImpl();
     m_pISystem = &vgui2::s_ISystem;
+    vgui2::SetLocalizeFileSystemImpl(vgui2::GetVFileSystem());
     
     m_bInitialized = true;
     
@@ -969,16 +1464,20 @@ void *CVGui2Interfaces::CreateInterface( const char *pName, int *pReturnCode )
         pInterface = m_pILocalize;
     else if( !Q_strcmp( pName, VGUI_SYSTEM_INTERFACE_VERSION_GS ) )
         pInterface = m_pISystem;
+    else if( !Q_strcmp( pName, vgui2::KEYVALUES_INTERFACE_VERSION ) )
+        pInterface = &vgui2::s_IKeyValues;
     else if( !Q_strcmp( pName, FILESYSTEM_INTERFACE_VERSION ) )
-        pInterface = m_pIVGui;
+        pInterface = vgui2::GetVFileSystem();
     else if( !Q_strcmp( pName, IBASEUI_NAME ) )
-        pInterface = m_pIVGui;
+        Con_Reportf("VGUI2: Unsupported interface requested: %s (returning NULL)\n", pName);
     else if( !Q_strcmp( pName, VENGINE_VGUI_VERSION ) )
-        pInterface = m_pIVGui;
+        Con_Reportf("VGUI2: Unsupported interface requested: %s (returning NULL)\n", pName);
     else if( !Q_strcmp( pName, IGAMEUIFUNCS_NAME ) )
-        pInterface = m_pISystem;
+        Con_Reportf("VGUI2: Unsupported interface requested: %s (returning NULL)\n", pName);
     else
         Con_Reportf("VGUI2: Unknown interface requested: %s\n", pName);
+
+    Con_Reportf("VGUI2: CreateInterface('%s') -> %p\n", pName, pInterface);
     
     if( pReturnCode )
         *pReturnCode = pInterface ? IFACE_OK : IFACE_FAILED;
