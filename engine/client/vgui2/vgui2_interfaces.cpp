@@ -8,7 +8,7 @@
 #include "ref_common.h"
 #include "VFileSystem009.h"
 
-#include "../../../3rdparty/tier1/Color.h"
+#include "../../../../hl1_source_sdk/public/Color.h"
 #include <stdlib.h>
 #include <string.h>
 #include <string>
@@ -828,10 +828,17 @@ public:
         m_color[2] = b;
         m_color[3] = a;
     }
-    void DrawSetColor(Color) override {}
+    void DrawSetColor(Color col) override
+    {
+        m_color[0] = col.r();
+        m_color[1] = col.g();
+        m_color[2] = col.b();
+        m_color[3] = col.a();
+    }
     
     void DrawFilledRect(int x0, int y0, int x1, int y1) override
     {
+        /*
         // Log current clip state at entry
         Con_Reportf("VGUI2: DrawFilledRect clip_state=(%d,%d,%d,%d) x0=%d y0=%d x1=%d y1=%d color=%d,%d,%d,%d\n", 
             s_currentClip[0], s_currentClip[1], s_currentClip[2], s_currentClip[3],
@@ -850,6 +857,7 @@ public:
         // END TEMPORARY BYPASS
         
         // Original clipped code (disabled for testing):
+        */
         int clipX = x0 < s_currentClip[0] ? s_currentClip[0] : x0;
         int clipY = y0 < s_currentClip[1] ? s_currentClip[1] : y0;
         int clipX1 = x1 > s_currentClip[0] + s_currentClip[2] ? s_currentClip[0] + s_currentClip[2] : x1;
@@ -857,14 +865,9 @@ public:
         
         if (clipX >= clipX1 || clipY >= clipY1)
         {
-            Con_Reportf("VGUI2: DrawFilledRect clipped out! clip=(%d,%d) to (%d,%d)\n", 
-                clipX, clipY, clipX1, clipY1);
             return;
         }
-        
-        Con_Reportf("VGUI2: DrawFilledRect calling FillRGBA at (%.0f,%.0f) size (%.0f,%.0f)\n",
-            (float)clipX, (float)clipY, (float)(clipX1 - clipX), (float)(clipY1 - clipY));
-        
+
         ref.dllFuncs.FillRGBA(kRenderTransTexture, 
             (float)clipX, (float)clipY, 
             (float)(clipX1 - clipX), (float)(clipY1 - clipY),
@@ -1221,11 +1224,16 @@ private:
         
         PushMakeCurrent(panel, true);
         
+        /*
         // Draw panel rect in GREEN to distinguish from direct injection (red)
         DrawSetColor( 0, 255, 0, 255 );
         DrawFilledRect(p->absPos[0], p->absPos[1], 
                        p->absPos[0] + p->size[0], 
                        p->absPos[1] + p->size[1]);
+        */
+
+        if (p->clientPanel)
+            p->clientPanel->PaintTraverse(true, true);
         
         for (int i = 0; i < p->childCount; i++)
         {

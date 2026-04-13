@@ -2,7 +2,7 @@
 #define VGUI2_SHARED_INTERFACES_H
 
 #include "VGUI2.h"
-#include "../../../3rdparty/tier1/Color.h"
+#include "../../../../hl1_source_sdk/public/Color.h"
 
 class IHTMLResponses;
 class IHTMLChromeController;

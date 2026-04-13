@@ -8,7 +8,7 @@
 #include "common.h"
 #include "client.h"
 
-#include "../../../3rdparty/tier1/Color.h"
+#include "../../../../hl1_source_sdk/public/Color.h"
 
 #define FONTFLAG_NONE         0
 #define FONTFLAG_ITALIC      0x001
@@ -157,6 +157,11 @@ HFont CScheme::GetFont(const char *fontName, bool /*proportional*/)
 
 Color CScheme::GetColor(const char *colorName, Color defaultColor)
 {
+    Con_Reportf("VGUI2: CScheme::GetColor this=%p color='%s' default=(%d,%d,%d,%d)\n",
+        this,
+        colorName ? colorName : "<null>",
+        defaultColor.r(), defaultColor.g(), defaultColor.b(), defaultColor.a());
+
     for( int i = 0; i < m_nColors; i++ )
     {
         if( !Q_strcmp(m_Colors[i].name, colorName) )
@@ -613,10 +618,19 @@ HScheme CSchemeManager::GetScheme(const char *tag)
 IScheme *CSchemeManager::GetIScheme(HScheme scheme)
 {
     if( scheme == 0 )
+    {
+        Con_Reportf("VGUI2: CSchemeManager::GetIScheme scheme=0 -> NULL\n");
         return NULL;
+    }
     int idx = (int)scheme - 1;
     if( idx < 0 || idx >= m_nSchemes )
+    {
+        Con_Reportf("VGUI2: CSchemeManager::GetIScheme scheme=%lu idx=%d -> NULL (nSchemes=%d)\n",
+            (unsigned long)scheme, idx, m_nSchemes);
         return NULL;
+    }
+    Con_Reportf("VGUI2: CSchemeManager::GetIScheme scheme=%lu idx=%d -> %p\n",
+        (unsigned long)scheme, idx, &m_Schemes[idx]);
     return &m_Schemes[idx];
 }
 
