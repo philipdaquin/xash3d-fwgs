@@ -22,6 +22,15 @@ namespace vgui2
 {
 
 class KeyValues;
+class ISchemeManagerEx : public ISchemeManager
+{
+public:
+    virtual HScheme LoadSchemeFromFileEx( VPANEL sizingPanel, const char *fileName, const char *tag ) = 0;
+    virtual int GetProportionalScaledValueEx( HScheme scheme, int normalizedValue ) = 0;
+    virtual int GetProportionalNormalizedValueEx( HScheme scheme, int scaledValue ) = 0;
+    virtual HScheme LoadSchemeFromFilePath( const char *fileName, const char *pathID, const char *tag ) = 0;
+};
+ISchemeManagerEx *scheme();
 
 typedef int HKeySymbol;
 
@@ -1124,7 +1133,11 @@ public:
     void EnableMouseCapture(VPANEL, bool) override {}
     void GetWorkspaceBounds(int &x, int &y, int &wide, int &tall) override { x = y = 0; wide = refState.width; tall = refState.height; }
     void GetAbsoluteWindowBounds(int &x, int &y, int &wide, int &tall) override { x = y = 0; wide = refState.width; tall = refState.height; }
-    void GetProportionalBase( int &, int &) override {}
+    void GetProportionalBase( int &wide, int &tall ) override
+    {
+        wide = m_proportionalBase[0];
+        tall = m_proportionalBase[1];
+    }
     void CalculateMouseVisible() override {}
     bool NeedKBInput() override { return false; }
     bool HasCursorPosFunctions() override { return false; }
@@ -1145,9 +1158,21 @@ public:
     void SetSupportsEsc(bool) override {}
     int GetFontBlur(vgui2::HFont) override { return 0; }
     bool IsAdditive(vgui2::HFont) override { return false; }
-    void SetProportionalBase(int, int) override {}
-    void GetHDProportionalBase(int &, int &) override {}
-    void SetHDProportionalBase(int, int) override {}
+    void SetProportionalBase(int wide, int tall) override
+    {
+        m_proportionalBase[0] = (wide > 0) ? wide : 640;
+        m_proportionalBase[1] = (tall > 0) ? tall : 480;
+    }
+    void GetHDProportionalBase(int &wide, int &tall) override
+    {
+        wide = m_hdProportionalBase[0];
+        tall = m_hdProportionalBase[1];
+    }
+    void SetHDProportionalBase(int wide, int tall) override
+    {
+        m_hdProportionalBase[0] = (wide > 0) ? wide : 640;
+        m_hdProportionalBase[1] = (tall > 0) ? tall : 480;
+    }
 
 private:
     int m_color[4] = {255, 255, 255, 255};
@@ -1155,6 +1180,8 @@ private:
     int m_textPos[2] = {0, 0};
     HFont m_textFont = INVALID_HFONT;
     int m_boundTexture = 0;
+    int m_proportionalBase[2] = {640, 480};
+    int m_hdProportionalBase[2] = {640, 480};
     
     bool IsPanelVisible(VPANEL panel)
     {
@@ -1302,11 +1329,55 @@ public:
 class CSchemeStub : public IScheme
 {
 public:
-    const char *GetResourceString(const char *) override { return ""; }
-    IBorder *GetBorder(const char *) override { return NULL; }
-    HFont GetFont(const char *, bool) override { return INVALID_HFONT; }
-    Color GetColor(const char *, Color defaultColor) override { return defaultColor; }
-    vgui2::HFont GetFontEx(const char *, bool, bool) override { return INVALID_HFONT; }
+    const char *GetResourceString(const char *resourceString) override
+    {
+        IScheme *pScheme = ResolveScheme();
+        return pScheme ? pScheme->GetResourceString(resourceString) : "";
+    }
+
+    IBorder *GetBorder(const char *borderName) override
+    {
+        IScheme *pScheme = ResolveScheme();
+        return pScheme ? pScheme->GetBorder(borderName) : NULL;
+    }
+
+    HFont GetFont(const char *fontName, bool proportional) override
+    {
+        IScheme *pScheme = ResolveScheme();
+        return pScheme ? pScheme->GetFont(fontName, proportional) : INVALID_HFONT;
+    }
+
+    void GetColorInto( const char *colorName, const Color &defaultColor, Color *pOutColor ) override
+    {
+        IScheme *pScheme = ResolveScheme();
+        if( !pOutColor )
+            return;
+
+        if( pScheme )
+            pScheme->GetColorInto( colorName, defaultColor, pOutColor );
+        else
+            *pOutColor = defaultColor;
+    }
+
+    vgui2::HFont GetFontEx(const char *fontName, bool proportional, bool forceUseBitmapFont) override
+    {
+        IScheme *pScheme = ResolveScheme();
+        return pScheme ? pScheme->GetFontEx(fontName, proportional, forceUseBitmapFont) : INVALID_HFONT;
+    }
+
+private:
+    static IScheme *ResolveScheme()
+    {
+        ISchemeManagerEx *pManager = vgui2::scheme();
+        if (!pManager)
+            return NULL;
+
+        HScheme defaultScheme = pManager->GetDefaultScheme();
+        if (!defaultScheme)
+            return NULL;
+
+        return pManager->GetIScheme(defaultScheme);
+    }
 };
 
 // ISchemeManager stub implementation
@@ -1321,11 +1392,24 @@ public:
     HTexture GetImageID( const char *, bool ) override { return 0; }
     IScheme *GetIScheme( HScheme ) override { return &m_Scheme; }
     void Shutdown( bool ) override {}
-    int GetProportionalScaledValue( int normalizedValue ) override { return normalizedValue; }
-    int GetProportionalNormalizedValue( int scaledValue ) override { return scaledValue; }
-    float GetProportionalScale() override { return 1.0f; }
-    int GetHDProportionalScaledValue(int normalizedValue) override { return normalizedValue; }
-    int GetHDProportionalNormalizedValue(int scaledValue) override { return scaledValue; }
+    int GetProportionalScaledValue( int normalizedValue ) override
+    {
+        return (int)(normalizedValue * GetProportionalScale());
+    }
+    int GetProportionalNormalizedValue( int scaledValue ) override
+    {
+        float scale = GetProportionalScale();
+        return (scale > 0.0f) ? (int)(scaledValue / scale) : scaledValue;
+    }
+    float GetProportionalScale() override
+    {
+        const int baseTall = 480;
+        if (refState.height <= 0)
+            return 1.0f;
+        return (float)refState.height / (float)baseTall;
+    }
+    int GetHDProportionalScaledValue(int normalizedValue) override { return GetProportionalScaledValue(normalizedValue); }
+    int GetHDProportionalNormalizedValue(int scaledValue) override { return GetProportionalNormalizedValue(scaledValue); }
 
 private:
     CSchemeStub m_Scheme;

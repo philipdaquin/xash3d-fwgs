@@ -131,10 +131,40 @@ struct ColorEntry_t
 class CScheme : public IScheme
 {
 public:
+    CScheme()
+    {
+        Reset();
+    }
+
+    void Reset()
+    {
+        m_nFonts = 0;
+        m_nColors = 0;
+        m_szTag[0] = '\0';
+
+        for( int i = 0; i < ARRAYSIZE( m_Fonts ); i++ )
+        {
+            m_Fonts[i].font = INVALID_HFONT;
+            m_Fonts[i].name[0] = '\0';
+            m_Fonts[i].tall = 0;
+            m_Fonts[i].weight = 0;
+            m_Fonts[i].flags = 0;
+        }
+
+        for( int i = 0; i < ARRAYSIZE( m_Colors ); i++ )
+        {
+            m_Colors[i].name[0] = '\0';
+            m_Colors[i].r = 0;
+            m_Colors[i].g = 0;
+            m_Colors[i].b = 0;
+            m_Colors[i].a = 0;
+        }
+    }
+
     const char *GetResourceString(const char *stringName) override { return ""; }
     IBorder *GetBorder(const char *borderName) override { return NULL; }
     HFont GetFont(const char *fontName, bool proportional) override;
-    Color GetColor(const char *colorName, Color defaultColor) override;
+    void GetColorInto( const char *colorName, const Color &defaultColor, Color *pOutColor ) override;
     HFont GetFontEx(const char *fontName, bool proportional, bool hdProportional) override
         { return GetFont(fontName, proportional); }
 
@@ -155,8 +185,12 @@ HFont CScheme::GetFont(const char *fontName, bool /*proportional*/)
     return INVALID_HFONT;
 }
 
-Color CScheme::GetColor(const char *colorName, Color defaultColor)
+void CScheme::GetColorInto( const char *colorName, const Color &defaultColor, Color *pOutColor )
 {
+    if( !pOutColor )
+        return;
+
+    *pOutColor = defaultColor;
     Con_Reportf("VGUI2: CScheme::GetColor this=%p color='%s' default=(%d,%d,%d,%d)\n",
         this,
         colorName ? colorName : "<null>",
@@ -167,10 +201,10 @@ Color CScheme::GetColor(const char *colorName, Color defaultColor)
         if( !Q_strcmp(m_Colors[i].name, colorName) )
         {
             ColorEntry_t &c = m_Colors[i];
-            return Color( c.r, c.g, c.b, c.a );
+            *pOutColor = Color( c.r, c.g, c.b, c.a );
+            return;
         }
     }
-    return defaultColor;
 }
 
 // Minimal VDF parser for .res files
@@ -248,11 +282,21 @@ public:
     HTexture GetImageID(const char *, bool) override { return 0; }
     IScheme *GetIScheme(HScheme scheme) override;
     void Shutdown(bool) override {}
-    int GetProportionalScaledValue(int v) override { return v; }
-    int GetProportionalNormalizedValue(int v) override { return v; }
-    float GetProportionalScale() override { return 1.0f; }
-    int GetHDProportionalScaledValue(int v) override { return v; }
-    int GetHDProportionalNormalizedValue(int v) override { return v; }
+    int GetProportionalScaledValue(int v) override { return (int)(v * GetProportionalScale()); }
+    int GetProportionalNormalizedValue(int v) override
+    {
+        float scale = GetProportionalScale();
+        return (scale > 0.0f) ? (int)(v / scale) : v;
+    }
+    float GetProportionalScale() override
+    {
+        const int baseTall = 480;
+        if (refState.height <= 0)
+            return 1.0f;
+        return (float)refState.height / (float)baseTall;
+    }
+    int GetHDProportionalScaledValue(int v) override { return GetProportionalScaledValue(v); }
+    int GetHDProportionalNormalizedValue(int v) override { return GetProportionalNormalizedValue(v); }
 
 private:
     HFont AddFont(ISurface *surface, const char *fontName, int tall, int weight, int flags);
@@ -571,7 +615,7 @@ HScheme CSchemeManager::LoadSchemeFromFile(const char *fileName, const char *tag
     }
 
     CScheme *scheme = &m_Schemes[m_nSchemes];
-    memset(scheme, 0, sizeof(CScheme));
+    scheme->Reset();
     Q_strncpy(scheme->m_szTag, tag, sizeof(scheme->m_szTag) - 1);
     scheme->m_szTag[sizeof(scheme->m_szTag) - 1] = '\0';
     Q_strncpy(m_schemeTags[m_nSchemes], tag, sizeof(m_schemeTags[m_nSchemes]) - 1);
@@ -629,6 +673,9 @@ IScheme *CSchemeManager::GetIScheme(HScheme scheme)
             (unsigned long)scheme, idx, m_nSchemes);
         return NULL;
     }
+    Con_Reportf("VGUI2: IScheme concrete vtable=%p, CScheme vtable would be=%p\n",
+        *(void **)&m_Schemes[idx],
+        *(void **)&m_Schemes[0]);
     Con_Reportf("VGUI2: CSchemeManager::GetIScheme scheme=%lu idx=%d -> %p\n",
         (unsigned long)scheme, idx, &m_Schemes[idx]);
     return &m_Schemes[idx];

@@ -13,6 +13,7 @@
 //=============================================================================
 
 #include <stdlib.h>
+#include <string.h>
 #include <generichash.h>
 #include <strtools.h>
 #include "minbase_endian.h"
@@ -46,13 +47,11 @@ uint32_t MurmurHash3_32( const void * key, size_t len, uint32_t seed, bool bCase
 	//----------
 	// body
 
-	const uint32_t * blocks = (const uint32_t *)(data + nblocks*4);
-
-	for(ptrdiff_t i = -nblocks; i; i++)
+	for ( ptrdiff_t i = 0; i < nblocks; ++i )
 	{
 		uint32_t t1;
-		memcpy(&t1, blocks+i, sizeof(uint32_t));
-		uint32_t k1 = LittleDWord(t1);
+		memcpy( &t1, data + ( i * 4 ), sizeof( t1 ) );
+		uint32_t k1 = LittleDWord( t1 );
 		k1 &= uSourceBitwiseAndMask;
 
 		k1 *= 0xcc9e2d51;

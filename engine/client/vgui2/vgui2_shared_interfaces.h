@@ -371,7 +371,13 @@ public:
 	virtual const char *GetResourceString( const char *stringName ) = 0;
 	virtual IBorder *GetBorder( const char *borderName ) = 0;
 	virtual HFont GetFont( const char *fontName, bool proportional = false ) = 0;
-	virtual Color GetColor( const char *colorName, Color defaultColor ) = 0;
+	virtual void GetColorInto( const char *colorName, const Color &defaultColor, Color *pOutColor ) = 0;
+	inline Color GetColor( const char *colorName, Color defaultColor )
+	{
+		Color outColor = defaultColor;
+		GetColorInto( colorName, defaultColor, &outColor );
+		return outColor;
+	}
 	virtual HFont GetFontEx( const char *fontName, bool proportional, bool hdProportional ) = 0;
 };
 
