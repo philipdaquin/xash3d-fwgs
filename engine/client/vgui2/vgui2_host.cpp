@@ -79,7 +79,8 @@ extern "C" EXPORT void VGui2_Init( void )
             // Set as embedded panel
             isurface->SetEmbeddedPanel( s_rootPanel );
             
-            Con_Reportf( "VGUI2: Initialized with real runtime, root panel=%d\n", (int)s_rootPanel );
+            Con_Reportf( "VGUI2: Initialized root panel=%d screen=%dx%d\n",
+                (int)s_rootPanel, refState.width, refState.height );
         }
         else
         {
@@ -229,5 +230,5 @@ void VGui2_OnResize( int width, int height )
         ipanel->Repaint( s_rootPanel );
     }
 
-    Con_Reportf( "VGUI2: Resize to %dx%d\n", width, height );
+    Con_Reportf( "VGUI2: Resize root=%d to %dx%d\n", (int)s_rootPanel, width, height );
 }

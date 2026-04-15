@@ -103,11 +103,86 @@ static unsigned int s_panelCount = 0;
 static int s_currentClip[4] = { 0, 0, 99999, 99999 };
 static int s_clipStack[32][4];
 static int s_clipStackDepth = 0;
+static int s_currentOrigin[2] = { 0, 0 };
+static int s_originStack[32][2];
+static int s_originStackDepth = 0;
 static VPANEL s_embeddedPanel = 0;
 static FontData_t s_fontData[MAX_VGUI2_FONTS];
 static TextureData_t s_textureData[MAX_VGUI2_TEXTURES];
 static int s_nextTextureId = 1;
 static const char *KEYVALUES_INTERFACE_VERSION = "KeyValues003";
+
+static inline PanelData_t *GetPanelData(VPANEL panel);
+
+void GetCurrentDrawOrigin( int &x, int &y )
+{
+    x = s_currentOrigin[0];
+    y = s_currentOrigin[1];
+}
+
+static bool PanelNameEquals( PanelData_t *p, const char *name )
+{
+    return p && p->clientPanel && name && !Q_stricmp( p->clientPanel->GetName(), name );
+}
+
+static void LogPanelGeometry( const char *tag, VPANEL panel )
+{
+    PanelData_t *p = GetPanelData( panel );
+    if( !p )
+    {
+        Con_Reportf( "VGUI2: %s panel=%d <invalid>\n", tag ? tag : "<tag>", (int)panel );
+        return;
+    }
+
+    const char *name = p->clientPanel ? p->clientPanel->GetName() : "<null>";
+    const char *className = p->clientPanel ? p->clientPanel->GetClassName() : "<null>";
+    const char *moduleName = p->clientPanel ? p->clientPanel->GetModuleName() : "<null>";
+    Con_Reportf(
+        "VGUI2: %s panel=%d name='%s' class='%s' module='%s' parent=%d pos=(%d,%d) size=(%d,%d) abs=(%d,%d) inset=(%d,%d,%d,%d) visible=%d enabled=%d proportional=%d children=%d\n",
+        tag ? tag : "<tag>",
+        (int)panel,
+        name ? name : "<null>",
+        className ? className : "<null>",
+        moduleName ? moduleName : "<null>",
+        (int)p->parent,
+        p->pos[0], p->pos[1],
+        p->size[0], p->size[1],
+        p->absPos[0], p->absPos[1],
+        p->insets[0], p->insets[1], p->insets[2], p->insets[3],
+        p->visible ? 1 : 0,
+        p->enabled ? 1 : 0,
+        p->clientPanel ? ( p->clientPanel->IsProportional() ? 1 : 0 ) : 0,
+        p->childCount );
+}
+
+static void LogParentChain( const char *tag, VPANEL panel )
+{
+    Con_Reportf( "VGUI2: %s parent-chain for panel=%d\n", tag ? tag : "<tag>", (int)panel );
+    int depth = 0;
+    VPANEL current = panel;
+    while( current && current != INVALID_PANEL && depth < 16 )
+    {
+        PanelData_t *p = GetPanelData( current );
+        if( !p )
+            break;
+
+        const char *name = p->clientPanel ? p->clientPanel->GetName() : "<null>";
+        const char *className = p->clientPanel ? p->clientPanel->GetClassName() : "<null>";
+        Con_Reportf(
+            "VGUI2:   depth=%d panel=%d name='%s' class='%s' parent=%d pos=(%d,%d) size=(%d,%d) abs=(%d,%d)\n",
+            depth,
+            (int)current,
+            name ? name : "<null>",
+            className ? className : "<null>",
+            (int)p->parent,
+            p->pos[0], p->pos[1],
+            p->size[0], p->size[1],
+            p->absPos[0], p->absPos[1] );
+
+        current = p->parent;
+        ++depth;
+    }
+}
 
 static IFileSystem *GetVFileSystem()
 {
@@ -773,7 +848,11 @@ public:
     void Shutdown() override {}
     void RunFrame() override {}
     VPANEL GetEmbeddedPanel() override { return s_embeddedPanel; }
-    void SetEmbeddedPanel( VPANEL panel ) override { s_embeddedPanel = panel; }
+    void SetEmbeddedPanel( VPANEL panel ) override
+    {
+        s_embeddedPanel = panel;
+        LogPanelGeometry( "SetEmbeddedPanel", panel );
+    }
     
     void PushMakeCurrent(VPANEL panel, bool useInsets) override
     {
@@ -814,11 +893,18 @@ public:
             memcpy(s_clipStack[s_clipStackDepth], s_currentClip, sizeof(int) * 4);
             s_clipStackDepth++;
         }
-        
+        if (s_originStackDepth < 32)
+        {
+            memcpy(s_originStack[s_originStackDepth], s_currentOrigin, sizeof(int) * 2);
+            s_originStackDepth++;
+        }
+
         s_currentClip[0] = x;
         s_currentClip[1] = y;
         s_currentClip[2] = w;
         s_currentClip[3] = h;
+        s_currentOrigin[0] = p->absPos[0] + insets[0];
+        s_currentOrigin[1] = p->absPos[1] + insets[1];
     }
     
     void PopMakeCurrent(VPANEL) override
@@ -827,6 +913,11 @@ public:
         {
             s_clipStackDepth--;
             memcpy(s_currentClip, s_clipStack[s_clipStackDepth], sizeof(int) * 4);
+        }
+        if (s_originStackDepth > 0)
+        {
+            s_originStackDepth--;
+            memcpy(s_currentOrigin, s_originStack[s_originStackDepth], sizeof(int) * 2);
         }
     }
     
@@ -847,35 +938,25 @@ public:
     
     void DrawFilledRect(int x0, int y0, int x1, int y1) override
     {
-        /*
-        // Log current clip state at entry
-        Con_Reportf("VGUI2: DrawFilledRect clip_state=(%d,%d,%d,%d) x0=%d y0=%d x1=%d y1=%d color=%d,%d,%d,%d\n", 
-            s_currentClip[0], s_currentClip[1], s_currentClip[2], s_currentClip[3],
-            x0, y0, x1, y1, m_color[0], m_color[1], m_color[2], m_color[3]);
-        
-        // TEMPORARY BYPASS ALL CLIPPING FOR TESTING
-        // This will draw even if outside clip bounds
-        Con_Reportf("VGUI2: DrawFilledRect UNCIPPED calling FillRGBA at (%.0f,%.0f) size (%.0f,%.0f)\n",
-            (float)x0, (float)y0, (float)(x1 - x0), (float)(y1 - y0));
-        
-        ref.dllFuncs.FillRGBA(kRenderTransTexture, 
-            (float)x0, (float)y0, 
-            (float)(x1 - x0), (float)(y1 - y0),
-            (byte)m_color[0], (byte)m_color[1], (byte)m_color[2], (byte)m_color[3]);
-        return;
-        // END TEMPORARY BYPASS
-        
-        // Original clipped code (disabled for testing):
-        */
-        int clipX = x0 < s_currentClip[0] ? s_currentClip[0] : x0;
-        int clipY = y0 < s_currentClip[1] ? s_currentClip[1] : y0;
-        int clipX1 = x1 > s_currentClip[0] + s_currentClip[2] ? s_currentClip[0] + s_currentClip[2] : x1;
-        int clipY1 = y1 > s_currentClip[1] + s_currentClip[3] ? s_currentClip[1] + s_currentClip[3] : y1;
+        const int absX0 = x0 + s_currentOrigin[0];
+        const int absY0 = y0 + s_currentOrigin[1];
+        const int absX1 = x1 + s_currentOrigin[0];
+        const int absY1 = y1 + s_currentOrigin[1];
+
+        int clipX = absX0 < s_currentClip[0] ? s_currentClip[0] : absX0;
+        int clipY = absY0 < s_currentClip[1] ? s_currentClip[1] : absY0;
+        int clipX1 = absX1 > s_currentClip[0] + s_currentClip[2] ? s_currentClip[0] + s_currentClip[2] : absX1;
+        int clipY1 = absY1 > s_currentClip[1] + s_currentClip[3] ? s_currentClip[1] + s_currentClip[3] : absY1;
         
         if (clipX >= clipX1 || clipY >= clipY1)
         {
             return;
         }
+
+        Con_Reportf("VGUI2: DrawFilledRect abs=(%d,%d %dx%d) clip=(%d,%d %dx%d) color=%d,%d,%d,%d\n",
+            absX0, absY0, absX1 - absX0, absY1 - absY0,
+            s_currentClip[0], s_currentClip[1], s_currentClip[2], s_currentClip[3],
+            m_color[0], m_color[1], m_color[2], m_color[3]);
 
         ref.dllFuncs.FillRGBA(kRenderTransTexture, 
             (float)clipX, (float)clipY, 
@@ -883,8 +964,30 @@ public:
             (byte)m_color[0], (byte)m_color[1], (byte)m_color[2], (byte)m_color[3]);
     }
     
-    void DrawOutlinedRect(int x0, int y0, int x1, int y1) override {}
-    void DrawLine(int, int, int, int) override {}
+    void DrawOutlinedRect(int x0, int y0, int x1, int y1) override
+    {
+        DrawFilledRect( x0, y0, x1, y0 + 1 );
+        DrawFilledRect( x0, y1 - 1, x1, y1 );
+        DrawFilledRect( x0, y0, x0 + 1, y1 );
+        DrawFilledRect( x1 - 1, y0, x1, y1 );
+    }
+    void DrawLine(int x0, int y0, int x1, int y1) override
+    {
+        if( x0 == x1 )
+        {
+            const int top = Q_min( y0, y1 );
+            const int bottom = Q_max( y0, y1 ) + 1;
+            DrawFilledRect( x0, top, x0 + 1, bottom );
+            return;
+        }
+
+        if( y0 == y1 )
+        {
+            const int left = Q_min( x0, x1 );
+            const int right = Q_max( x0, x1 ) + 1;
+            DrawFilledRect( left, y0, right, y0 + 1 );
+        }
+    }
     void DrawPolyLine(int *, int *, int) override {}
     void DrawSetTextFont(HFont font) override { m_textFont = font; }
     void DrawSetTextColor(int r, int g, int b, int a) override
@@ -894,7 +997,13 @@ public:
         m_textColor[2] = b;
         m_textColor[3] = a;
     }
-    void DrawSetTextColor(Color) override {}
+    void DrawSetTextColor(Color color) override
+    {
+        m_textColor[0] = color.r();
+        m_textColor[1] = color.g();
+        m_textColor[2] = color.b();
+        m_textColor[3] = color.a();
+    }
     void DrawSetTextPos(int x, int y) override
     {
         m_textPos[0] = x;
@@ -928,7 +1037,10 @@ public:
             (byte)m_textColor[3]
         };
 
-        m_textPos[0] = Con_DrawString(m_textPos[0], m_textPos[1], ansi, color);
+        const int absX = m_textPos[0] + s_currentOrigin[0];
+        const int absY = m_textPos[1] + s_currentOrigin[1];
+        const int nextAbsX = Con_DrawString(absX, absY, ansi, color);
+        m_textPos[0] = nextAbsX - s_currentOrigin[0];
     }
     void DrawUnicodeChar(wchar_t ch) override
     {
@@ -953,9 +1065,17 @@ public:
         {
             Q_strncpy(tex.name, filename, sizeof(tex.name) - 1);
             tex.glTexnum = ref.dllFuncs.GL_LoadTexture(filename, NULL, 0, TF_IMAGE | TF_NOMIPMAP);
+            if( tex.glTexnum == 0 )
+            {
+                char withTga[160];
+                Q_snprintf( withTga, sizeof( withTga ), "%s.tga", filename );
+                tex.glTexnum = ref.dllFuncs.GL_LoadTexture(withTga, NULL, 0, TF_IMAGE | TF_NOMIPMAP);
+            }
             tex.wide = 0;
             tex.tall = 0;
             tex.valid = (tex.glTexnum != 0);
+            Con_Reportf("VGUI2: DrawSetTextureFile name='%s' tex=%d valid=%d\n",
+                filename, tex.glTexnum, tex.valid ? 1 : 0);
         }
     }
     void DrawSetTextureRGBA(int id, const unsigned char *rgba, int wide, int tall, int, bool) override
@@ -992,8 +1112,21 @@ public:
         if (!tex.valid || tex.glTexnum == 0)
             return;
 
+        const int absX0 = x0 + s_currentOrigin[0];
+        const int absY0 = y0 + s_currentOrigin[1];
+        const int absX1 = x1 + s_currentOrigin[0];
+        const int absY1 = y1 + s_currentOrigin[1];
+
+        int clipX = absX0 < s_currentClip[0] ? s_currentClip[0] : absX0;
+        int clipY = absY0 < s_currentClip[1] ? s_currentClip[1] : absY0;
+        int clipX1 = absX1 > s_currentClip[0] + s_currentClip[2] ? s_currentClip[0] + s_currentClip[2] : absX1;
+        int clipY1 = absY1 > s_currentClip[1] + s_currentClip[3] ? s_currentClip[1] + s_currentClip[3] : absY1;
+
+        if (clipX >= clipX1 || clipY >= clipY1)
+            return;
+
         ref.dllFuncs.Color4ub((byte)m_color[0], (byte)m_color[1], (byte)m_color[2], (byte)m_color[3]);
-        ref.dllFuncs.R_DrawStretchPic((float)x0, (float)y0, (float)(x1 - x0), (float)(y1 - y0),
+        ref.dllFuncs.R_DrawStretchPic((float)clipX, (float)clipY, (float)(clipX1 - clipX), (float)(clipY1 - clipY),
             0.0f, 0.0f, 1.0f, 1.0f, tex.glTexnum);
     }
     bool IsTextureIDValid(int id) override
@@ -1010,6 +1143,14 @@ public:
     { 
         wide = refState.width; 
         tall = refState.height; 
+        static int s_lastWide = -1;
+        static int s_lastTall = -1;
+        if( wide != s_lastWide || tall != s_lastTall )
+        {
+            Con_Reportf("VGUI2: GetScreenSize -> %dx%d\n", wide, tall);
+            s_lastWide = wide;
+            s_lastTall = tall;
+        }
     }
     void SetAsTopMost(VPANEL, bool) override {}
     void BringToFront(VPANEL) override {}
@@ -1070,6 +1211,11 @@ public:
         fontData.lowRange = lowRange;
         fontData.highRange = highRange;
         fontData.charWidth = Q_max(4, fontData.tall / 2);
+        Con_Reportf("VGUI2: AddGlyphSetToFont font=%lu face='%s' tall=%d weight=%d flags=0x%x range=%d-%d\n",
+            (unsigned long)font,
+            windowsFontName ? windowsFontName : "<null>",
+            fontData.tall, fontData.weight, fontData.flags,
+            fontData.lowRange, fontData.highRange);
         return true;
     }
     bool AddCustomFontFile(const char *) override { return true; }
@@ -1217,6 +1363,13 @@ private:
                 }
             }
             p->needsSolve = false;
+
+            if( panel == s_embeddedPanel || PanelNameEquals( p, "CounterStrikeViewport" ) || PanelNameEquals( p, "TeamMenu" ) )
+            {
+                LogPanelGeometry( "SolveTraverse", panel );
+                if( PanelNameEquals( p, "TeamMenu" ) )
+                    LogParentChain( "TeamMenu", panel );
+            }
         }
         
         for (int i = 0; i < p->childCount; i++)

@@ -207,6 +207,7 @@ def build(bld):
 		'common/soundlib',
 		'platform',
 		'../hl1_source_sdk/public',
+		'../../cs16-client/third_party/ValveFileVDF',
 	]
 
 	# basic build: dedicated only

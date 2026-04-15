@@ -39,4 +39,9 @@ private:
 	vgui2::ISystem *m_pISystem;
 };
 
+namespace vgui2
+{
+void GetCurrentDrawOrigin( int &x, int &y );
+}
+
 #endif // VGUI2_INTERFACES_H
