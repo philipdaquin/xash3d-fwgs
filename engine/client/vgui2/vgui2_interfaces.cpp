@@ -741,8 +741,11 @@ public:
     void PaintTraverse(VPANEL vguiPanel, bool forceRepaint, bool allowForce) override
     {
         PanelData_t *p = GetPanelData(vguiPanel);
-        if (p && p->clientPanel)
-            p->clientPanel->PaintTraverse(forceRepaint, allowForce);
+        // Engine-side VGUI2 paint traversal is disabled here so the client-owned
+        // HL1 Source SDK path can be the only active menu renderer.
+        (void)forceRepaint;
+        (void)allowForce;
+        (void)p;
     }
     void Repaint(VPANEL vguiPanel) override
     {
@@ -1403,23 +1406,19 @@ private:
         }
         
         PushMakeCurrent(panel, true);
-        
-        /*
-        // Draw panel rect in GREEN to distinguish from direct injection (red)
-        DrawSetColor( 0, 255, 0, 255 );
-        DrawFilledRect(p->absPos[0], p->absPos[1], 
-                       p->absPos[0] + p->size[0], 
-                       p->absPos[1] + p->size[1]);
-        */
 
+        // Disabled on purpose: the client-side HL1 Source SDK now owns VGUI2
+        // panel traversal and painting.
+        /*
         if (p->clientPanel)
             p->clientPanel->PaintTraverse(true, true);
-        
+
         for (int i = 0; i < p->childCount; i++)
         {
             if (p->children[i] != INVALID_PANEL)
                 PaintTraverse_Recursive(p->children[i]);
         }
+        */
         
         PopMakeCurrent(panel);
     }
