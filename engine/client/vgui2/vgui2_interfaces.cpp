@@ -1270,13 +1270,12 @@ public:
     
     void SolveTraverse(VPANEL panel, bool) override
     {
-        SolveTraverse_Recursive(panel);
+        Con_Reportf("VGUI2: SolveTraverse disabled on engine side panel=%d\n", (int)panel);
     }
     
     void PaintTraverse(VPANEL panel) override
     {
-        Con_Reportf("VGUI2: CSurfaceReal::PaintTraverse called panel=%d\n", (int)panel);
-        PaintTraverse_Recursive(panel);
+        Con_Reportf("VGUI2: PaintTraverse disabled on engine side panel=%d\n", (int)panel);
     }
     
     void EnableMouseCapture(VPANEL, bool) override {}
