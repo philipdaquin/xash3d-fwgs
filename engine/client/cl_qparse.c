@@ -217,7 +217,8 @@ static void CL_ParseQuakeServerInfo( sizebuf_t *msg )
 
 	// Re-init hud video, especially if we changed game directories
 	clgame.dllFuncs.pfnVidInit();
-
+	if( clgame.dllFuncs.pfnVGui2_VidInit )
+		clgame.dllFuncs.pfnVGui2_VidInit();
 	if( Con_FixedFont( ))
 	{
 		// seperate the printfs so the server message can have a color

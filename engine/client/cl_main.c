@@ -20,7 +20,6 @@ GNU General Public License for more details.
 #include "input.h"
 #include "kbutton.h"
 #include "vgui_draw.h"
-#include "vgui2/vgui2_host.h"
 #include "library.h"
 #include "vid_common.h"
 #include "pm_local.h"
@@ -3629,10 +3628,6 @@ void CL_Init( void )
 	S_Init();	// init sound
 	Voice_Init( VOICE_DEFAULT_CODEC, 3, true ); // init voice (do not open the device)
 
-	// Con_Printf(" TESTING VGUI 2 ");
-	// VGui2_Init();
-
-
 	// unreliable buffer. unsed for unreliable commands and voice stream
 	MSG_Init( &cls.datagram, "cls.datagram", cls.datagram_buf, sizeof( cls.datagram_buf ));
 
@@ -3640,6 +3635,9 @@ void CL_Init( void )
 
 	if( !CL_LoadProgs( libpath ))
 		Host_Error( "can't initialize %s: %s\n", libpath, COM_GetLibraryError( ));
+
+	if( clgame.dllFuncs.pfnVGui2_Startup )
+		clgame.dllFuncs.pfnVGui2_Startup();
 
 	ID_Init();
 
@@ -3674,10 +3672,6 @@ void CL_Shutdown( void )
 	SCR_Shutdown ();
 	CL_UnloadProgs ();
 	cls.initialized = false;
-
-	// for client-side VGUI support we use other order
-	if( FI && FI->GameInfo && !FI->GameInfo->internal_vgui_support )
-		VGui_Shutdown();
 
 	if( g_fsapi.Delete )
 		g_fsapi.Delete( "demoheader.tmp" ); // remove tmp file

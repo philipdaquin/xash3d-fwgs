@@ -297,8 +297,8 @@ def build(bld):
 
 		# add client files
 		if not bld.env.DEDICATED:
-			source += bld.path.ant_glob('client/**/*.c')
-			source += bld.path.ant_glob('client/**/*.cpp')
+			source += bld.path.ant_glob('client/**/*.c', excl=['client/vgui2/**'])
+			source += bld.path.ant_glob('client/**/*.cpp', excl=['client/vgui2/**'])
 			libs += ['bzip2', 'MultiEmulator', 'opus', 'opusfile', 'vorbis', 'vorbisfile']
 
 		# Android port is linked differently

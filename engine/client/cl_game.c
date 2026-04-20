@@ -33,7 +33,6 @@ GNU General Public License for more details.
 #include "sprite.h"
 #include "library.h"
 #include "vgui_draw.h"
-#include "vgui2/vgui2_host.h"
 #include "sound.h"		// SND_STOP_LOOPING
 #include "platform/platform.h"
 
@@ -97,6 +96,11 @@ static const dllfunc_t cdll_new_exports[] = 	// allowed only in SDK 2.3 and high
 { "IN_ClientTouchEvent", (void **)&clgame.dllFuncs.pfnTouchEvent}, // Xash3D FWGS ext
 { "IN_ClientMoveEvent", (void **)&clgame.dllFuncs.pfnMoveEvent}, // Xash3D FWGS ext
 { "IN_ClientLookEvent", (void **)&clgame.dllFuncs.pfnLookEvent}, // Xash3D FWGS ext
+{ "VGui2_Initialize", (void **)&clgame.dllFuncs.pfnVGui2_Initialize }, // optional VGUI2 explicit export
+{ "VGui2_Startup", (void **)&clgame.dllFuncs.pfnVGui2_Startup }, // optional VGUI2 explicit export
+{ "VGui2_VidInit", (void **)&clgame.dllFuncs.pfnVGui2_VidInit }, // optional VGUI2 explicit export
+{ "VGui2_Paint", (void **)&clgame.dllFuncs.pfnVGui2_Paint }, // optional VGUI2 explicit export
+{ "VGui2_Shutdown", (void **)&clgame.dllFuncs.pfnVGui2_Shutdown }, // optional VGUI2 explicit export
 };
 
 static void pfnSPR_DrawHoles( int frame, int x, int y, const wrect_t *prc );
@@ -3948,14 +3952,11 @@ void CL_UnloadProgs( void )
 	Mod_ClearUserData();
 
 	// NOTE: HLFX 0.5 has strange bug: hanging on exit if no map was loaded
+	if( clgame.dllFuncs.pfnVGui2_Shutdown )
+		clgame.dllFuncs.pfnVGui2_Shutdown();
+
 	if( Q_stricmp( GI->gamefolder, "hlfx" ) || GI->version != 0.5f )
 		clgame.dllFuncs.pfnShutdown();
-
-	if( GI->internal_vgui_support )
-		VGui_Shutdown();
-
-	if( GI->vgui2 )
-		VGui2_Shutdown();
 
 	Cvar_FullSet( "cl_background", "0", FCVAR_READ_ONLY );
 	Cvar_FullSet( "host_clientloaded", "0", FCVAR_READ_ONLY );
@@ -3964,6 +3965,7 @@ void CL_UnloadProgs( void )
 	Cmd_Unlink( CMD_CLIENTDLL );
 
 	COM_FreeLibrary( clgame.hInstance );
+
 	Mem_FreePool( &cls.mempool );
 	Mem_FreePool( &clgame.mempool );
 	memset( &clgame, 0, sizeof( clgame ));
@@ -3975,7 +3977,6 @@ qboolean CL_LoadProgs( const char *name )
 	CL_EXPORT_FUNCS	GetClientAPI; // single export
 	qboolean valid_single_export = false;
 	qboolean missed_exports = false;
-	qboolean try_internal_vgui_support = GI->internal_vgui_support;
 	int i;
 
 	if( clgame.hInstance ) CL_UnloadProgs();
@@ -3994,27 +3995,10 @@ qboolean CL_LoadProgs( const char *name )
 	Con_Printf( S_NOTE "%s uses %s for mouse input\n", name, clgame.client_dll_uses_sdl ? "SDL2" : "Windows API" );
 #endif
 
-	// NOTE: important stuff!
-	// vgui must startup BEFORE loading client.dll to avoid get error ERROR_NOACESS during LoadLibrary
-	Con_Printf(  "Initializing VGUI2...\n" );
-
-	// VGUI2 bootstrap - always initialize (gameinfo vgui2 flag no longer required)
-	VGui2_Init();
-	Con_Reportf( "VGUI2: VGUI2 bootstrap initialized\n" );
-
-	if( !try_internal_vgui_support && VGui_LoadProgs( NULL ))
-		VGui_Startup( refState.width, refState.height );
-	else
-		try_internal_vgui_support = true; // we failed to load vgui_support, but let's probe client.dll for support anyway
-
 	clgame.hInstance = COM_LoadLibrary( name, false, false );
 
 	if( !clgame.hInstance )
 		return false;
-
-	// delayed vgui initialization for internal support
-	if( try_internal_vgui_support && VGui_LoadProgs( clgame.hInstance ))
-		VGui_Startup( refState.width, refState.height );
 
 	// clear exports
 	ClearExports( cdll_exports, ARRAYSIZE( cdll_exports ));
@@ -4088,6 +4072,9 @@ qboolean CL_LoadProgs( const char *name )
 		clgame.hInstance = NULL;
 		return false;
 	}
+
+	if( clgame.dllFuncs.pfnVGui2_Initialize )
+		clgame.dllFuncs.pfnVGui2_Initialize( &gEngfuncs );
 
 	Cvar_FullSet( "host_clientloaded", "1", FCVAR_READ_ONLY );
 

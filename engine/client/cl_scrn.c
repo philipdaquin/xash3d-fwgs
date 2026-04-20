@@ -897,16 +897,14 @@ void SCR_VidInit( void )
 	}
 
 	// notify vgui about screen size change
-	if( clgame.hInstance )
-	{
-		VGui_Startup( refState.width, refState.height );
-	}
 
 	CL_ClearSpriteTextures(); // now all hud sprites are invalid
 
 	// vid_state has changed
 	if( gameui.hInstance ) gameui.dllFuncs.pfnVidInit();
 	if( clgame.hInstance ) clgame.dllFuncs.pfnVidInit();
+	if( clgame.dllFuncs.pfnVGui2_VidInit ) clgame.dllFuncs.pfnVGui2_VidInit();
+
 
 	// restart console size
 	Con_VidInit ();

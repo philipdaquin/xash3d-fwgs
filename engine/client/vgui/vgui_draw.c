@@ -628,4 +628,3 @@ void VGui_ReportTextInput( const char *text )
 	if( vgui.dllFuncs.TextInput )
 		vgui.dllFuncs.TextInput( text );
 }
-

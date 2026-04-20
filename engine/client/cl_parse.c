@@ -885,6 +885,8 @@ void CL_ParseServerData( sizebuf_t *msg, connprotocol_t proto )
 
 	// Re-init hud video, especially if we changed game directories
 	clgame.dllFuncs.pfnVidInit();
+	if( clgame.dllFuncs.pfnVGui2_VidInit )
+		clgame.dllFuncs.pfnVGui2_VidInit();
 
 	cls.state = ca_connected;
 

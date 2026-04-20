@@ -61,6 +61,11 @@ typedef struct cldll_func_src_s
 	void	(*pfnChatInputPosition)( int *x, int *y );
 	int	(*pfnGetPlayerTeam)( int iPlayer );
 	void	*(*pfnClientFactory)( void );
+	int	(*pfnVGui2_Initialize)( struct cl_enginefuncs_s *pEnginefuncs );
+	void	(*pfnVGui2_Startup)( void );
+	int	(*pfnVGui2_VidInit)( void );
+	void	(*pfnVGui2_Paint)( void );
+	int	(*pfnVGui2_Shutdown)( void );
 } cldll_func_src_t;
 
 typedef struct cldll_func_dst_s
@@ -460,4 +465,9 @@ void CL_GetSecuredClientAPI( CL_EXPORT_FUNCS F )
 	clgame.dllFuncs.pfnDirectorMessage = cldllFuncSrc.pfnDirectorMessage;
 	clgame.dllFuncs.pfnGetStudioModelInterface = cldllFuncSrc.pfnGetStudioModelInterface;
 	clgame.dllFuncs.pfnChatInputPosition = cldllFuncSrc.pfnChatInputPosition;
+	clgame.dllFuncs.pfnVGui2_Initialize = cldllFuncSrc.pfnVGui2_Initialize;
+	clgame.dllFuncs.pfnVGui2_Startup = cldllFuncSrc.pfnVGui2_Startup;
+	clgame.dllFuncs.pfnVGui2_VidInit = cldllFuncSrc.pfnVGui2_VidInit;
+	clgame.dllFuncs.pfnVGui2_Paint = cldllFuncSrc.pfnVGui2_Paint;
+	clgame.dllFuncs.pfnVGui2_Shutdown = cldllFuncSrc.pfnVGui2_Shutdown;
 }

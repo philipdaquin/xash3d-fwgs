@@ -74,6 +74,12 @@ typedef struct cldll_func_s
 	int (*pfnTouchEvent)( int type, int fingerID, float x, float y, float dx, float dy );
 	void (*pfnMoveEvent)( float forwardmove, float sidemove );
 	void (*pfnLookEvent)( float relyaw, float relpitch );
+	// VGUI2 extension (optional for client dlls that export explicit VGui2_* entry points)
+	int (*pfnVGui2_Initialize)( cl_enginefunc_t *pEnginefuncs );
+	void (*pfnVGui2_Startup)( void );
+	int (*pfnVGui2_VidInit)( void );
+	void (*pfnVGui2_Paint)( void );
+	int (*pfnVGui2_Shutdown)( void );
 } cldll_func_t;
 
 #endif//CDLL_EXP_H
