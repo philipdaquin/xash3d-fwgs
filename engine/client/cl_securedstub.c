@@ -61,6 +61,7 @@ typedef struct cldll_func_src_s
 	void	(*pfnChatInputPosition)( int *x, int *y );
 	int	(*pfnGetPlayerTeam)( int iPlayer );
 	void	*(*pfnClientFactory)( void );
+	void	(*pfnVGuiStartup)( int width, int height );
 	int	(*pfnVGui2_Initialize)( struct cl_enginefuncs_s *pEnginefuncs );
 	void	(*pfnVGui2_Startup)( void );
 	int	(*pfnVGui2_VidInit)( void );
@@ -465,6 +466,7 @@ void CL_GetSecuredClientAPI( CL_EXPORT_FUNCS F )
 	clgame.dllFuncs.pfnDirectorMessage = cldllFuncSrc.pfnDirectorMessage;
 	clgame.dllFuncs.pfnGetStudioModelInterface = cldllFuncSrc.pfnGetStudioModelInterface;
 	clgame.dllFuncs.pfnChatInputPosition = cldllFuncSrc.pfnChatInputPosition;
+	clgame.dllFuncs.pfnVGuiStartup = cldllFuncSrc.pfnVGuiStartup;
 	clgame.dllFuncs.pfnVGui2_Initialize = cldllFuncSrc.pfnVGui2_Initialize;
 	clgame.dllFuncs.pfnVGui2_Startup = cldllFuncSrc.pfnVGui2_Startup;
 	clgame.dllFuncs.pfnVGui2_VidInit = cldllFuncSrc.pfnVGui2_VidInit;

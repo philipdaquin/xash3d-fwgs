@@ -67,6 +67,8 @@ typedef struct cldll_func_s
 	void	(*pfnDirectorMessage)( int iSize, void *pbuf );
 	int	(*pfnGetStudioModelInterface)( int version, struct r_studio_interface_s **ppinterface, struct engine_studio_api_s *pstudio );
 	void	(*pfnChatInputPosition)( int *x, int *y );
+	void	*(*pClientFactory)( void );
+	void	(*pfnVGuiStartup)( int width, int height );
 	// Xash3D extension
 	int	(*pfnGetRenderInterface)( int version, render_api_t *renderfuncs, render_interface_t *callback );
 	void	(*pfnClipMoveToEntity)( struct physent_s *pe, const vec3_t start, vec3_t mins, vec3_t maxs, const vec3_t end, struct pmtrace_s *tr );

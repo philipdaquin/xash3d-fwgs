@@ -70,6 +70,9 @@ static void VGui_Startup( int width, int height )
 	//ASSERT( rootpanel->getSurfaceBase() != NULL );
 
 	g_api->DrawInit ();
+
+
+	
 }
 
 static void VGui_Shutdown( void )

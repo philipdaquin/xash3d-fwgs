@@ -21,6 +21,9 @@ GNU General Public License for more details.
 #include "shake.h"
 #include "hltv.h"
 #include "input.h"
+
+void CL_ReportVGui2Funcs( const char *stage );
+
 #if XASH_LOW_MEMORY != 2
 int CL_UPDATE_BACKUP = SINGLEPLAYER_BACKUP;
 #endif
@@ -1786,6 +1789,7 @@ void CL_RegisterResources( sizebuf_t *msg, connprotocol_t proto )
 		{
 			Con_Printf( "Setting up renderer...\n" );
 			Con_Printf( "Hello testing this is from another code...\n" );
+			CL_ReportVGui2Funcs( "from CL_RegisterResources" );
 
 			// load tempent sprites (glowshell, muzzleflashes etc)
 			CL_LoadClientSprites ();

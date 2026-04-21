@@ -1179,7 +1179,7 @@ qboolean Voice_Init( const char *pszCodecName, int quality, qboolean preinit )
 		Voice_Shutdown();
 		return false;
 	}
-	Con_Printf( "Calling VoiceCapture INIT" );
+	Con_Printf( "Calling VoiceCapture INIT \n" );
 
 	voice.device_opened = VoiceCapture_Init();
 

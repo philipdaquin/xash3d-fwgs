@@ -96,6 +96,7 @@ static const dllfunc_t cdll_new_exports[] = 	// allowed only in SDK 2.3 and high
 { "IN_ClientTouchEvent", (void **)&clgame.dllFuncs.pfnTouchEvent}, // Xash3D FWGS ext
 { "IN_ClientMoveEvent", (void **)&clgame.dllFuncs.pfnMoveEvent}, // Xash3D FWGS ext
 { "IN_ClientLookEvent", (void **)&clgame.dllFuncs.pfnLookEvent}, // Xash3D FWGS ext
+{ "VGui_Startup", (void **)&clgame.dllFuncs.pfnVGuiStartup }, // optional VGUI startup export
 { "VGui2_Initialize", (void **)&clgame.dllFuncs.pfnVGui2_Initialize }, // optional VGUI2 explicit export
 { "VGui2_Startup", (void **)&clgame.dllFuncs.pfnVGui2_Startup }, // optional VGUI2 explicit export
 { "VGui2_VidInit", (void **)&clgame.dllFuncs.pfnVGui2_VidInit }, // optional VGUI2 explicit export
@@ -104,6 +105,23 @@ static const dllfunc_t cdll_new_exports[] = 	// allowed only in SDK 2.3 and high
 };
 
 static void pfnSPR_DrawHoles( int frame, int x, int y, const wrect_t *prc );
+
+void CL_ReportVGui2Funcs( const char *stage )
+{
+	Con_Printf( "%s: VGUI2 funcs at %s:\n", __func__, stage );
+	Con_Printf( "  pfnInitialize      = %p\n", (void *)clgame.dllFuncs.pfnInitialize );
+	Con_Printf( "  pfnInit            = %p\n", (void *)clgame.dllFuncs.pfnInit );
+	Con_Printf( "  pfnVidInit         = %p\n", (void *)clgame.dllFuncs.pfnVidInit );
+	Con_Printf( "  pfnRedraw          = %p\n", (void *)clgame.dllFuncs.pfnRedraw );
+	Con_Printf( "  pfnUpdateClientData= %p\n", (void *)clgame.dllFuncs.pfnUpdateClientData );
+	Con_Printf( "  pfnShutdown        = %p\n", (void *)clgame.dllFuncs.pfnShutdown );
+	Con_Printf( "  pfnVGui2_Initialize= %p\n", (void *)clgame.dllFuncs.pfnVGui2_Initialize );
+	Con_Printf( "  pfnVGuiStartup     = %p\n", (void *)clgame.dllFuncs.pfnVGuiStartup );
+	Con_Printf( "  pfnVGui2_Startup   = %p\n", (void *)clgame.dllFuncs.pfnVGui2_Startup );
+	Con_Printf( "  pfnVGui2_VidInit   = %p\n", (void *)clgame.dllFuncs.pfnVGui2_VidInit );
+	Con_Printf( "  pfnVGui2_Paint     = %p\n", (void *)clgame.dllFuncs.pfnVGui2_Paint );
+	Con_Printf( "  pfnVGui2_Shutdown  = %p\n", (void *)clgame.dllFuncs.pfnVGui2_Shutdown );
+}
 
 /*
 ====================
@@ -4064,6 +4082,8 @@ qboolean CL_LoadProgs( const char *name )
 			Con_Reportf( S_WARN "%s: failed to get address of %s proc\n", __func__, cdll_new_exports[i].name );
 	}
 
+	CL_ReportVGui2Funcs( "after export binding" );
+
 	if( !clgame.dllFuncs.pfnInitialize( &gEngfuncs, CLDLL_INTERFACE_VERSION ))
 	{
 		COM_PushLibraryError( "can't init client API" );
@@ -4073,8 +4093,18 @@ qboolean CL_LoadProgs( const char *name )
 		return false;
 	}
 
+	CL_ReportVGui2Funcs( "after pfnInitialize" );
+
 	if( clgame.dllFuncs.pfnVGui2_Initialize )
+	{
+		Con_Printf( "%s: calling VGui2_Initialize\n", __func__ );
 		clgame.dllFuncs.pfnVGui2_Initialize( &gEngfuncs );
+		Con_Printf( "%s: VGui2_Initialize finished\n", __func__ );
+	}
+	else
+	{
+		Con_Printf( "%s: missing VGui2_Initialize\n", __func__ );
+	}
 
 	Cvar_FullSet( "host_clientloaded", "1", FCVAR_READ_ONLY );
 

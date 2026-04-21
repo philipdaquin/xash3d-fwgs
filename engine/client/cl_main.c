@@ -3325,6 +3325,9 @@ CL_InitLocal
 */
 static void CL_InitLocal( void )
 {
+
+		Con_Printf( "===== CL_InitLocal ==== \n" );
+
 	cls.state = ca_disconnected;
 	cls.signon = 0;
 	memset( &cls.serveradr, 0, sizeof( cls.serveradr ) );
@@ -3625,8 +3628,8 @@ void CL_Init( void )
 	CL_InitLocal();
 
 	VID_Init();	// init video
-	S_Init();	// init sound
-	Voice_Init( VOICE_DEFAULT_CODEC, 3, true ); // init voice (do not open the device)
+
+	Con_Printf( "===== CL_Init ==== \n" );
 
 	// unreliable buffer. unsed for unreliable commands and voice stream
 	MSG_Init( &cls.datagram, "cls.datagram", cls.datagram_buf, sizeof( cls.datagram_buf ));
@@ -3634,10 +3637,24 @@ void CL_Init( void )
 	COM_GetCommonLibraryPath( LIBRARY_CLIENT, libpath, sizeof( libpath ));
 
 	if( !CL_LoadProgs( libpath ))
+	{
 		Host_Error( "can't initialize %s: %s\n", libpath, COM_GetLibraryError( ));
+	}
 
-	if( clgame.dllFuncs.pfnVGui2_Startup )
+	Con_Printf( "===== vgui2...==== \n" );
+
+	if( clgame.dllFuncs.pfnVGui2_Startup ) {
+		Con_Printf( "initialising vgui2...\n" );
 		clgame.dllFuncs.pfnVGui2_Startup();
+	} else {
+		Con_Printf( "missing clgame.dllFuncs.pfnVGui2_Startup()\n" );
+	}
+
+
+	S_Init();	// init sound
+	Voice_Init( VOICE_DEFAULT_CODEC, 3, true ); // init voice (do not open the device)
+
+
 
 	ID_Init();
 

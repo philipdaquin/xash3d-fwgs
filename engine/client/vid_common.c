@@ -207,6 +207,9 @@ static void VID_Mode_f( void )
 
 void VID_Init( void )
 {
+
+			Con_Printf( "===== VID_Init ==== \n" );
+
 	// system screen width and height (don't suppose for change from console at all)
 	Cvar_RegisterVariable( &window_width );
 	Cvar_RegisterVariable( &window_height );
