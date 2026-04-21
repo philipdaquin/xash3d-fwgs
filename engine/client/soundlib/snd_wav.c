@@ -181,8 +181,6 @@ qboolean Sound_LoadWAV( const char *name, const byte *buffer, fs_offset_t filesi
 	if( !buffer || filesize <= 0 )
 		return false;
 
-	Con_Printf( "SNDDBG: Sound_LoadWAV name='%s' filesize=%lld\n", name ? name : "<null>", (long long)filesize );
-
 	iff_data = buffer;
 	iff_end = buffer + filesize;
 

@@ -17,6 +17,7 @@ GNU General Public License for more details.
 #define SOUNDLIB_H
 
 #include "common.h"
+#include "sound.h"
 
 #define FRAME_SIZE		32768	// must match with mp3 frame size
 #define OUTBUF_SIZE		8192	// don't change!
