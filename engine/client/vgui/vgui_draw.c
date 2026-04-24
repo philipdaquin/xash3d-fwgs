@@ -164,15 +164,12 @@ static void GAME_EXPORT VGUI_UploadTexture( int id, const char *buffer, int widt
 
 static void GAME_EXPORT VGUI_CreateTexture( int id, int width, int height )
 {
-	// nothing uses it, it can be removed
-	Host_Error( "%s: deprecated\n", __func__ );
-
+	Con_Printf( "%s: implemeneted\n", __func__ );
 }
 
 static void GAME_EXPORT VGUI_UploadTextureBlock( int id, int drawX, int drawY, const byte *rgba, int blockWidth, int blockHeight )
 {
-	// nothing uses it, it can be removed
-	Host_Error( "%s: deprecated\n", __func__ );
+	Con_Printf( "%s: implemeneted\n", __func__ );
 }
 
 static void GAME_EXPORT VGUI_BindTexture( int id )
@@ -272,6 +269,11 @@ static void GAME_EXPORT VGUI_CursorSelect( VGUI_DefaultCursor cursor )
 		Platform_SetCursorType( cursor );
 }
 
+static void GAME_EXPORT VGUI_SetVisible( qboolean state )
+{
+	Con_Printf( "%s: implemeneted\n", __func__ );
+}
+
 static byte GAME_EXPORT VGUI_GetColor( int i, int j )
 {
 	return g_color_table[i][j];
@@ -296,30 +298,34 @@ void VGui_RegisterCvars( void )
 
 static const vguiapi_t gEngfuncs =
 {
-	false, // Not initialized yet
-	VGUI_DrawInit, // VGUI_DrawInit,
-	VGUI_DrawShutdown, // VGUI_DrawShutdown,
-	VGUI_SetupDrawingText, // VGUI_SetupDrawingText,
-	VGUI_SetupDrawingRect, // VGUI_SetupDrawingRect,
-	VGUI_SetupDrawingText, // VGUI_SetupDrawingImage, (same as text)
-	VGUI_BindTexture, // VGUI_BindTexture,
-	VGUI_EnableTexture, // VGUI_EnableTexture,
-	VGUI_CreateTexture, // VGUI_CreateTexture,
-	VGUI_UploadTexture, // VGUI_UploadTexture,
-	VGUI_UploadTextureBlock, // VGUI_UploadTextureBlock,
-	VGUI_DrawQuad, // VGUI_DrawQuad,
-	VGUI_GetTextureSizes, // VGUI_GetTextureSizes,
-	VGUI_GenerateTexture, // VGUI_GenerateTexture,
-	VGUI_EngineMalloc,
-	VGUI_CursorSelect,
-	VGUI_GetColor,
-	VGUI_IsInGame,
-	Key_EnableTextInput,
-	VGUI_GetMousePos,
-	VGUI_UtfProcessChar,
-	Platform_GetClipboardText,
-	Platform_SetClipboardText,
-	Platform_GetKeyModifiers,
+	.initialized = false, // Not initialized yet
+	.DrawInit = VGUI_DrawInit,
+	.DrawShutdown = VGUI_DrawShutdown,
+	.SetupDrawingText = VGUI_SetupDrawingText,
+	.SetupDrawingRect = VGUI_SetupDrawingRect,
+	.SetupDrawingImage = VGUI_SetupDrawingText, // same as text
+	.BindTexture = VGUI_BindTexture,
+	.EnableTexture = VGUI_EnableTexture,
+	.CreateTexture = VGUI_CreateTexture,
+	.UploadTexture = VGUI_UploadTexture,
+	.UploadTextureBlock = VGUI_UploadTextureBlock,
+	.DrawQuad = VGUI_DrawQuad,
+	.GetTextureSizes = VGUI_GetTextureSizes,
+	.GenerateTexture = VGUI_GenerateTexture,
+	.EngineMalloc = VGUI_EngineMalloc,
+	.CursorSelect = VGUI_CursorSelect,
+	.GetColor = VGUI_GetColor,
+	.IsInGame = VGUI_IsInGame,
+	.SetVisible = VGUI_SetVisible,
+	.GetCursorPos = VGUI_GetMousePos,
+	.ProcessUtfChar = VGUI_UtfProcessChar,
+	.Startup = NULL,
+	.Shutdown = NULL,
+	.GetPanel = NULL,
+	.Paint = NULL,
+	.Mouse = NULL,
+	.Key = NULL,
+	.MouseMove = NULL,
 };
 
 qboolean VGui_LoadProgs( HINSTANCE hInstance )
