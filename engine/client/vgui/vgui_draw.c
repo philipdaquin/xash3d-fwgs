@@ -164,12 +164,49 @@ static void GAME_EXPORT VGUI_UploadTexture( int id, const char *buffer, int widt
 
 static void GAME_EXPORT VGUI_CreateTexture( int id, int width, int height )
 {
-	Con_Printf( "%s: implemeneted\n", __func__ );
+	rgbdata_t *r_image;
+	char texName[32];
+
+	if( id <= 0 || id >= vgui.max_textures || width <= 0 || height <= 0 )
+	{
+		Con_DPrintf( S_ERROR "%s: bad texture %i. Ignored\n", __func__, id );
+		return;
+	}
+
+	r_image = Image_NewTemp();
+	if( !r_image )
+	{
+		Con_Printf( S_ERROR "%s: failed to allocate texture %i\n", __func__, id );
+		return;
+	}
+
+	Q_snprintf( texName, sizeof( texName ), "*vgui%i", id );
+
+	r_image->width = width;
+	r_image->height = height;
+	r_image->type = PF_RGBA_32;
+	r_image->size = r_image->width * r_image->height * 4;
+	r_image->flags = IMAGE_HAS_ALPHA;
+	r_image->buffer = NULL;
+
+	vgui.textures[id].gl_texturenum = GL_LoadTextureInternal( texName, r_image, TF_IMAGE | TF_NEAREST );
+	FS_FreeImage( r_image );
+
+	if( vgui.textures[id].gl_texturenum )
+		vgui.bound_texture = id;
 }
 
 static void GAME_EXPORT VGUI_UploadTextureBlock( int id, int drawX, int drawY, const byte *rgba, int blockWidth, int blockHeight )
 {
-	Con_Printf( "%s: implemeneted\n", __func__ );
+	if( id <= 0 || id >= vgui.max_textures || !vgui.textures[id].gl_texturenum || !rgba || blockWidth <= 0 || blockHeight <= 0 )
+	{
+		Con_DPrintf( S_ERROR "%s: bad texture %i. Ignored\n", __func__, id );
+		return;
+	}
+
+	ref.dllFuncs.GL_Bind( XASH_TEXTURE0, vgui.textures[id].gl_texturenum );
+	ref.dllFuncs.VGUI_UploadTextureBlock( drawX, drawY, rgba, blockWidth, blockHeight );
+	vgui.bound_texture = id;
 }
 
 static void GAME_EXPORT VGUI_BindTexture( int id )
@@ -271,7 +308,20 @@ static void GAME_EXPORT VGUI_CursorSelect( enum VGUI_DefaultCursor cursor )
 
 static void GAME_EXPORT VGUI_SetVisible( qboolean state )
 {
-	Con_Printf( "%s: implemeneted\n", __func__ );
+
+	host.mouse_visible=state;
+
+	// Con_Printf( "%s: implemeneted\n", __func__ );
+	// #ifdef XASH_SDL
+	// 	SDL_ShowCursor( state );
+	// 	if( !state )
+	// 		SDL_GetRelativeMouseState( NULL, NULL );
+	// #ifdef XASH_VGUI2
+	// 	// TODO
+	// #else
+	// 	SDLash_EnableTextInput( state, true );
+	// #endif
+	// #endif
 }
 
 static byte GAME_EXPORT VGUI_GetColor( int i, int j )
