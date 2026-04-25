@@ -263,7 +263,7 @@ static void GAME_EXPORT VGUI_GetMousePos( int *_x, int *_y )
 	*_y = y / yscale;
 }
 
-static void GAME_EXPORT VGUI_CursorSelect( VGUI_DefaultCursor cursor )
+static void GAME_EXPORT VGUI_CursorSelect( enum VGUI_DefaultCursor cursor )
 {
 	if( vgui.cursor != cursor )
 		Platform_SetCursorType( cursor );

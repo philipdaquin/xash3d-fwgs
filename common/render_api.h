@@ -179,7 +179,7 @@ struct ref_viewpass_s;
 
 typedef struct render_api_s
 {
-	// Get renderer info (doesn't changes engine state at all)
+	// Renderer queries
 	intptr_t	(*RenderGetParm)( int parm, int arg );	// generic
 	void		(*GetDetailScaleForTexture)( int texture, float *xScale, float *yScale );
 	void		(*GetExtraParmsForTexture)( int texture, byte *red, byte *green, byte *blue, byte *alpha );
@@ -189,13 +189,13 @@ typedef struct render_api_s
 	byte		(*LightToTexGamma)( byte color );	// software gamma support
 	float		(*GetFrameTime)( void );
 
-	// Set renderer info (tell engine about changes)
+	// Engine state updates
 	void		(*R_SetCurrentEntity)( struct cl_entity_s *ent ); // tell engine about both currententity and currentmodel
 	void		(*R_SetCurrentModel)( struct model_s *mod );	// change currentmodel but leave currententity unchanged
 	int		(*R_FatPVS)( const float *org, float radius, byte *visbuffer, qboolean merge, qboolean fullvis );
 	void		(*R_StoreEfrags)( struct efrag_s **ppefrag, int framecount );// store efrags for static entities
 
-	// Texture tools
+	// Texture helpers
 	int		(*GL_FindTexture)( const char *name );
 	const char*	(*GL_TextureName)( unsigned int texnum );
 	const byte*	(*GL_TextureData)( unsigned int texnum ); // may be NULL
@@ -205,12 +205,12 @@ typedef struct render_api_s
 	int		(*GL_CreateTextureArray)( const char *name, int width, int height, int depth, const void *buffer, texFlags_t flags );
 	void		(*GL_FreeTexture)( unsigned int texnum );
 
-	// Decals manipulating (draw & remove)
+	// Decals
 	void		(*DrawSingleDecal)( struct decal_s *pDecal, struct msurface_s *fa );
 	float		*(*R_DecalSetupVerts)( struct decal_s *pDecal, struct msurface_s *surf, int texture, int *outCount );
 	void		(*R_EntityRemoveDecals)( struct model_s *mod ); // remove all the decals from specified entity (BSP only)
 
-	// AVIkit support
+	// AVI support
 	struct movie_state_s *(*AVI_LoadVideo)( const char *filename, qboolean load_audio );
 	qboolean		(*AVI_GetVideoInfo)( struct movie_state_s *Avi, int *xres, int *yres, float *duration ); // a1ba: changed longs to int
 	int		(*AVI_GetVideoFrameNumber)( struct movie_state_s *Avi, float time );
@@ -222,7 +222,7 @@ typedef struct render_api_s
 	qboolean	(*AVI_Think)( struct movie_state_s *Avi );
 	qboolean	(*AVI_SetParm)( struct movie_state_s *Avi, enum movie_parms_e parm, ... );
 
-	// glState related calls (must use this instead of normal gl-calls to prevent de-synchornize local states between engine and the client)
+	// GL state helpers
 	void		(*GL_Bind)( int tmu, unsigned int texnum );
 	void		(*GL_SelectTexture)( int tmu );
 	void		(*GL_LoadTextureMatrix)( const float *glmatrix );
@@ -236,7 +236,7 @@ typedef struct render_api_s
 	void		(*GL_Reserved0)( void );	// for potential interface expansion without broken compatibility
 	void		(*GL_Reserved1)( void );
 
-	// Misc renderer functions
+	// Misc renderer hooks
 	void		(*GL_DrawParticles)( const struct ref_viewpass_s *rvp, qboolean trans_pass, float frametime );
 	void		(*EnvShot)( const float *vieworg, const char *name, qboolean skyshot, int shotsize ); // store skybox into gfx\env folder
 	int		(*SPR_LoadExt)( const char *szPicName, unsigned int texFlags ); // extended version of SPR_Load
@@ -247,11 +247,11 @@ typedef struct render_api_s
 	int		(*pfnSaveFile)( const char *filename, const void *data, int len );
 	void		(*R_Reserved0)( void );
 
-	// static allocations
+	// Memory management
 	void		*(*pfnMemAlloc)( size_t cb, const char *filename, const int fileline ) ALLOC_CHECK( 1 );
 	void		(*pfnMemFree)( void *mem, const char *filename, const int fileline );
 
- 	// engine utils (not related with render API but placed here)
+	// Engine utilities
 	char		**(*pfnGetFilesList)( const char *pattern, int *numFiles, int gamedironly );
 	unsigned int	(*pfnFileBufferCRC32)( const void *buffer, const int length );
 	int		(*COM_CompareFileTime)( const char *filename1, const char *filename2, int *iCompare );
@@ -262,7 +262,7 @@ typedef struct render_api_s
 	void		(*S_FadeMusicVolume)( float fadePercent );	// fade background track (0-100 percents)
 	// a1ba: changed long to int
 	void		(*SetRandomSeed)( int lSeed );		// set custom seed for RANDOM_FLOAT\RANDOM_LONG for predictable random
-	// ONLY ADD NEW FUNCTIONS TO THE END OF THIS STRUCT.  INTERFACE VERSION IS FROZEN AT 37
+	// ABI is frozen at version 37. Append-only changes only.
 } render_api_t;
 
 // render callbacks

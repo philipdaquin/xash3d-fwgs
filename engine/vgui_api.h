@@ -190,7 +190,7 @@ typedef struct  vguiapi_s
 	void	(*Key)( enum VGUI_KeyAction action, enum VGUI_KeyCode code );
 	void	(*MouseMove)( int x, int y );
 
-	// void	(*TextInput)( const char *text );
+	void	(*TextInput)( const char *text );
 	// called from engine side
 	// void	(*EnableTextInput)( qboolean enable, qboolean force );
 	// int		(*GetClipboardText)( char *buffer, size_t bufferSize );

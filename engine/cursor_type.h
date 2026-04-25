@@ -17,7 +17,7 @@ GNU General Public License for more details.
 #ifndef CURSOR_TYPE_H
 #define CURSOR_TYPE_H
 
-typedef enum
+typedef enum VGUI_DefaultCursor
 {
 	dc_user,
 	dc_none,
