@@ -1,0 +1,104 @@
+#
+# Copyright (c) 2019-2022 Ruben Perez Hidalgo (rubenperez038 at gmail dot com)
+#
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+#
+
+import os ;
+import sequence ;
+
+# Stuff shared between unit and integration tests
+alias boost_mysql_test
+    :
+        /boost/mysql//boost_mysql
+        /boost/test//boost_unit_test_framework
+    :
+    :
+    :
+        <include>common
+        <link>shared
+    ;
+
+# Unit tests
+unit-test boost_mysql_unittests 
+    : 
+        boost_mysql_test
+        unit/detail/auth/auth_calculator.cpp
+        unit/detail/auxiliar/static_string.cpp
+        unit/detail/auxiliar/value_type_traits.cpp
+        unit/detail/protocol/capabilities.cpp
+        unit/detail/protocol/date.cpp
+        unit/detail/protocol/null_bitmap_traits.cpp
+        unit/detail/protocol/serialization_test.cpp
+        unit/detail/protocol/text_deserialization_value.cpp
+        unit/detail/protocol/text_deserialization_error.cpp
+        unit/detail/protocol/binary_deserialization_value.cpp
+        unit/detail/protocol/binary_deserialization_error.cpp
+        unit/detail/protocol/row_deserialization.cpp
+        unit/metadata.cpp
+        unit/value.cpp
+        unit/value_constexpr.cpp
+        unit/row.cpp
+        unit/error.cpp
+        unit/execute_params.cpp
+        unit/prepared_statement.cpp
+        unit/resultset.cpp
+        unit/connection.cpp
+        unit/entry_point.cpp
+    ;
+
+
+# Integration test filtering
+local test_exclusions = "" ;
+if [ os.environ BOOST_MYSQL_NO_UNIX_SOCKET_TESTS ] != "" {
+    test_exclusions += "!@unix" ;
+}
+if [ os.environ BOOST_MYSQL_NO_SHA256_TESTS ] != "" {
+    test_exclusions += "!@sha256" ;
+}
+
+local test_filter = [ sequence.join $(test_exclusions) : ":" ] ;
+
+local test_command = "" ;
+if $(test_filter) != "" {
+    test_command = "-t $(test_filter)" ;
+}
+
+# Integration tests
+unit-test boost_mysql_integrationtests 
+    :
+        boost_mysql_test
+        /boost/coroutine//boost_coroutine
+        integration/utils/src/get_endpoint.cpp
+        integration/utils/src/metadata_validator.cpp
+        integration/utils/src/network_result.cpp
+        integration/utils/src/er_network_variant.cpp
+        integration/utils/src/sync_errc.cpp
+        integration/utils/src/sync_exc.cpp
+        integration/utils/src/async_callback.cpp
+        integration/utils/src/async_callback_noerrinfo.cpp
+        integration/utils/src/async_future.cpp
+        integration/utils/src/async_coroutine.cpp
+        integration/utils/src/async_coroutinecpp20.cpp
+        integration/utils/src/default_completion_tokens.cpp
+        integration/connection.cpp
+        integration/connect.cpp
+        integration/handshake.cpp
+        integration/query.cpp
+        integration/prepare_statement.cpp
+        integration/execute_statement.cpp
+        integration/close_statement.cpp
+        integration/resultset.cpp
+        integration/prepared_statement_lifecycle.cpp
+        integration/quit_connection.cpp
+        integration/close_connection.cpp
+        integration/reconnect.cpp
+        integration/database_types.cpp
+        integration/entry_point.cpp
+    :
+        <testing.arg>$(test_command)
+        <include>integration/utils/include
+    ;
+
+explicit boost_mysql_integrationtests ;

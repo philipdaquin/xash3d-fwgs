@@ -1,0 +1,185 @@
+[/
+    Copyright (c) 2019-2022 Ruben Perez Hidalgo (rubenperez038 at gmail dot com)
+   
+    Distributed under the Boost Software License, Version 1.0. (See accompanying
+    file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+]
+
+[section:resultsets Resultsets]
+[nochunk]
+
+[reflink2 resultset Resultset objects] represent the result of
+a SQL query. They are returned by the [refmem connection query] and
+[refmem prepared_statement execute] functions, as well as their
+corresponding asynchronous versions.
+
+[section:rows Rows]
+
+A [reflink resultset] represents tabular data. Data is represented
+row-by-row, using the [reflink row] class, which represent an array 
+of [reflink value]s, which you can retrieve using [refmem row values]. 
+This array will have a single element for each field (column) in the [reflink resultset].
+Fields appear in the resultset in the same order as in the SQL query.
+
+For example, let `rowobj` an [reflink row] obtained from a [reflink resultset]
+originated from the query `"SELECT first_name, last_name, age FROM employees"`:
+
+``
+const row& rowobj = /* read the row, see below for more info */
+const std::vector<value>& vals = 
+    rowobj.values(); // vals will have three elements
+value first_name = vals[0]; // stored type boost::string_view
+value last_name  = vals[1]; // stored type boost::string_view
+value age        = vals[2]; // stored type std::int64_t
+``
+
+[endsect]
+
+[section:read Reading rows]
+
+A [reflink resultset] does not read all the retrieved information into memory
+directly. Instead, [reflink resultset]s are I/O objects, which know how to
+retrieve rows. This allows to read rows progressively, allowing for better
+efficiency.
+
+There are three methods of retrieving rows:
+
+* [refmem resultset read_one] and [refmem resultset async_read_one]: 
+  retrieves a single row.
+* [refmem resultset read_many] and [refmem resultset async_read_many]:
+  retrieves an array of rows, up to a certain count.
+* [refmem resultset read_all] and [refmem resultset async_read_all]:
+  retrieves all the remaining rows.
+
+[heading Reading a single row]
+
+The [refmem resultset read_one] family retrieve the next row.
+The functions get passed a [reflink row] lvalue reference, which
+will get populated by the next read row. The function returns a 
+`bool` indicating whether a row was read or not. You can use it as follows:
+
+``
+tcp_resultset result = /* obtain a resultset, e.g. via connection::query */
+row row_obj;
+while (result.read_one(row_obj))
+{
+    // Do stuff with row_obj
+}
+``
+
+Note that if any of the fields are strings, the memory
+pointed to by the values will be owned by the [reflink row] object.
+Thus, these values will be valid as long as the [reflink row] object
+is kept alive and valid.
+
+The examples on async queries with [link mysql.examples.query_async_futures
+futures], [link mysql.examples.query_async_coroutines Boost.Coroutine coroutines]
+and [link mysql.examples.query_async_coroutinescpp20 C++20 coroutines]
+make use of [refmem resultset async_read_one].
+
+[heading Reading multiple rows]
+
+The [refmem resultset read_many] family retrieve many
+rows at a single time. When you call them, you pass in
+the maximum number of rows you want to read. For example:
+
+``
+tcp_resultset result = /* obtain a resultset, e.g. via connection::query */
+std::vector<row> rows = result.read_many(5); // at most 5 rows
+``
+
+The [refmem resultset read_all] functions work similarly to
+[refmem resultset read_many], except that they retrieve all the
+rows in the resultset.
+
+[endsect]
+
+[section:complete Resultsets becoming complete]
+
+When you have read every single row in a [reflink resultset],
+then we say the resultset is [*complete]. You can query for this
+fact calling the [refmem resultset complete] member function.
+
+A [reflink resultset] completes the first time you try to
+read a row, but there are not any more rows available. For example,
+in a resultset with 4 rows, any of the following actions will
+complete the resultset:
+
+* Calling [refmem resultset read_one] 5 times.
+* Calling [refmem resultset read_many] with a count of 5 or greater
+  (or several times, with a total count of 5 or greater).
+* Calling [refmem resultset read_all].
+
+After a [reflink resultset] is complete, some extra information about
+the query becomes available, like [refmem resultset warning_count]
+or [refmem resultset affected_rows]. MySQL sends this information
+as an extra packet only after sending every single resultset row,
+hence this mechanic.
+
+A resultset may also be [*empty], which means it has no row
+to be retrieved. Non `SELECT` SQL statements (e.g. `UPDATE`
+and `INSERT`) generate empty resultsets. Empty resultsets
+are complete from the beginning: you don't need to
+call [refmem resultset read_one] to make them complete.
+
+[warning
+    Because of how the MySQL protocol works, once you obtain
+    a [reflink resultset], [*you must read it entirely]
+    (i.e. until it's complete)
+    [*before engaging in any subsequent operation that implies
+    communication with the server] (e.g. issuing another query,
+    preparing a statement, closing a statement...).
+    Failing to do so results in undefined behavior.
+]
+
+Note also that, since resultsets perform network transfers,
+you must keep the [reflink connection] object alive and
+open while reading rows.
+
+[endsect]
+
+[section:metadata Metadata]
+
+Resultset objects hold metadata describing the fields they
+contain. You can access these data using [refmem resultset fields].
+This function returns a collection of [reflink field_metadata]
+objects. There is one object for each field in the SQL query,
+and in the same order as in the query. You can find a bunch
+of useful information in this object, like the field name,
+its type, whether it's a key or not, and so on.
+
+Metadata is always available (i.e. you don't need to
+make the [reflink resultset] [link mysql.resultsets.complete complete]
+before accessing it). For empty resultsets, [refmem resultset fields]
+returns an empty collection.
+
+[endsect]
+
+[section:server_send When does the server send the rows?]
+
+We said resultsets allow you to read the rows progressively.
+However, what are the details of the process of the communications
+between __Self__ and the server? The exact behavior depends on
+how the [reflink resultset] was generated:
+
+* If it was generated using [refmem connection query] or
+  [refmem connection async_query], then you are using the
+  [*text protocol]. In this case, the server will send
+  every row immediately after processing the query
+  (the protocol provides no option to avoid this).
+  However you can choose to start processing them
+  as soon as the first one arrives by using
+  [refmem resultset read_one] or [refmem resultset read_many].
+* If it was generated using [refmem prepared_statement execute]
+  or [refmem prepared_statement async_execute], then you are
+  using the [*binary protocol]. The current implementation
+  asks the server to send every row after the execution,
+  making it similar to the case above. However, the
+  protocol does allow sending rows progressively.
+  Future implementations may take advantage of this
+  fact when using [refmem resultset read_one] or 
+  [refmem resultset read_many].
+
+[endsect]
+
+[endsect]
