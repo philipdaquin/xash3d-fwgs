@@ -1730,7 +1730,7 @@ static qboolean Touch_ButtonEdit( touchEventType type, int fingerID, float x, fl
 
 				// make button last to bring it up
                 // warning: iter is changed
-                if( ( button->type == touch_command ) )
+				if( button->type == touch_command )
                 {
                     iter = std::rotate(iter, iter + 1, touch.list_user.end());
                 }

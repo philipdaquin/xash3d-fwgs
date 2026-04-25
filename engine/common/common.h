@@ -71,6 +71,15 @@ GNU General Public License for more details.
 #define MAX_SYSPATH		PATH_MAX	// system filepath
 #define MAX_MODS		512	// environment games that engine can keep visible
 #define BIT( n )		(1U << ( n ))
+#ifndef M_PI2
+#define M_PI2			(M_PI * 2.0)
+#endif
+#ifndef RAD2DEG
+#define RAD2DEG( x )	((double)(x) * (double)(180.0 / M_PI))
+#endif
+#ifndef DEG2RAD
+#define DEG2RAD( x )	((double)(x) * (double)(M_PI / 180.0))
+#endif
 
 #ifndef __cplusplus
 #ifdef NULL

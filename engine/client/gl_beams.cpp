@@ -26,6 +26,10 @@ GNU General Public License for more details.
 #include "studio.h"
 #include "cl_tent.h"
 
+#ifndef M_PI2
+#define M_PI2 ((double)(M_PI * 2))
+#endif
+
 #define CURVEDBEAM 0
 #define NOISE_DIVISIONS	64	// don't touch - many tripmines cause the crash when it equal 128
 typedef struct

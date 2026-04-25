@@ -39,10 +39,12 @@ GNU General Public License for more details.
 
 #include <optional>
 #include <chrono>
+#ifndef __EMSCRIPTEN__
 #include <boost/asio.hpp>
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/awaitable.hpp>
 #include <boost/asio/use_awaitable.hpp>
+#endif
 
 #define MAX_TOTAL_CMDS		16
 #define MAX_CMD_BUFFER		4000
@@ -1461,6 +1463,7 @@ void CL_ParseNETInfoMessage( netadr_t from, sizebuf_t *msg )
 
 //===================================================================
 
+#ifndef __EMSCRIPTEN__
 boost::asio::io_context ioc_cl_main;
 std::optional<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>> ioc_cl_main_work_guard;
 
@@ -2160,6 +2163,47 @@ void CL_Precache_f( void )
 {
 	boost::asio::co_spawn(ioc_cl_main, Co_CL_Precache(), boost::asio::detached);
 }
+#else
+void CL_Userinfo_f( void )
+{
+}
+
+void CL_Physinfo_f( void )
+{
+}
+
+static void CL_PrepSound( void )
+{
+	cl.audio_prepped = true;
+}
+
+static void CL_PrepVideo( void )
+{
+	cl.video_prepped = true;
+}
+
+void CL_Precache_f( void )
+{
+	int	spawncount = Q_atoi( Cmd_Argv( 1 ));
+
+	CL_PrepSound();
+	CL_PrepVideo();
+
+	if( Cmd_Argc() > 2 )
+	{
+		int svCheatState = Q_atoi( Cmd_Argv( 2 ));
+		Cvar_SetFloat( "sv_cheats", svCheatState ? 1.0f : 0.0f );
+	}
+	else
+	{
+		Cvar_SetFloat( "sv_cheats", 0.0f );
+	}
+
+	Cvar_SetCheatState( false );
+	BF_WriteByte( &cls.netchan.message, clc_stringcmd );
+	BF_WriteString( &cls.netchan.message, va( "begin %i\n", spawncount ));
+}
+#endif
 
 /*
 =================
@@ -2391,14 +2435,18 @@ void Host_ClientFrame( void )
 
 	if( cls.initialized )
 	{
+#ifndef __EMSCRIPTEN__
 		ioc_cl_main.poll_one();
+#endif
 		clgame.dllFuncs.pfnFrame( host.frametime );
 
 		// fetch results from server
+#ifndef __EMSCRIPTEN__
 		CL_ReadPackets();
+#endif
 
-        // update voice
-        Voice_Idle( host.frametime );
+	        // update voice
+	        Voice_Idle( host.frametime );
 
 		VID_CheckChanges();
 
@@ -2503,8 +2551,10 @@ void CL_Init( void )
 		cls.olddemonum = -1;
 		cls.demonum = -1;
 
+#ifndef __EMSCRIPTEN__
 		ioc_cl_main_work_guard.emplace(boost::asio::make_work_guard(ioc_cl_main));
 		ioc_cl_main.reset();
+#endif
 	}
 	else
 		Sys_Warn("Could not load client library:\n%s", Com_GetLibraryError());
@@ -2539,8 +2589,10 @@ void CL_Shutdown( void )
 		CL_UnloadProgs ();
 		cls.initialized = false;
 
+#ifndef __EMSCRIPTEN__
 		ioc_cl_main_work_guard.reset();
 		ioc_cl_main.stop();
+#endif
 	}
 
 	FS_Delete( "demoheader.tmp" ); // remove tmp file

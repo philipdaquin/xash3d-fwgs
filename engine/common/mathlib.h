@@ -53,6 +53,9 @@ GNU General Public License for more details.
 
 #define RAD_TO_STUDIO	(32768.0 / M_PI)
 #define STUDIO_TO_RAD	(M_PI / 32768.0)
+#ifndef M_PI2
+#define M_PI2			(M_PI * 2.0)
+#endif
 #define nanmask		(255<<23)
 
 template <class Type>

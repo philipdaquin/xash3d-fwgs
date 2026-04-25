@@ -64,7 +64,6 @@ def apply_indexhtml(self):
 	tsk = self.link_task
 	node = tsk.outputs[0]
 
-	tsk.outputs.append(node.change_ext('.js'))
 	tsk.outputs.append(node.change_ext('.wasm'))
 
 	if '--preload-file' in getattr(self, 'linkflags', []) + self.env.LINKFLAGS:
@@ -73,7 +72,7 @@ def apply_indexhtml(self):
 	inst_to = getattr(self, 'special_install_path', None)
 	if inst_to:
 		self.add_install_files(install_to=inst_to,
-			install_from=tsk.outputs[1:], chmod=Utils.O644, task=tsk)
+			install_from=tsk.outputs, chmod=Utils.O644, task=tsk)
 
 def configure(conf):
 	if not conf.env.CC:

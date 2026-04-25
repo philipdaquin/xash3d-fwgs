@@ -14,6 +14,11 @@ GNU General Public License for more details.
 #pragma once
 
 namespace ui {
+#ifdef __EMSCRIPTEN__
+	inline void Update_Initiate( void ) {}
+	inline void Update_OnGui( void ) {}
+#else
 	void Update_Initiate();
 	void Update_OnGui();
+#endif
 }

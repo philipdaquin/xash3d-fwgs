@@ -92,7 +92,7 @@ void CCubeMapManager::LoadData()
     col_idx = 0;
     cache_env_line = {};
 
-    while(pfile = COM_ParseFile(pfile, token))
+    while((pfile = COM_ParseFile(pfile, token)))
     {
         switch(col_idx++)
         {
@@ -133,7 +133,7 @@ void CCubeMapManager::LoadData()
         } cache_at_line;
         col_idx = 0;
 
-        while(pfile = COM_ParseFile(pfile, token))
+        while((pfile = COM_ParseFile(pfile, token)))
         {
             if(consume)
             {

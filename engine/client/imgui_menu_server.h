@@ -17,7 +17,13 @@ GNU General Public License for more details.
 #include <functional>
 
 namespace ui {
+#ifdef __EMSCRIPTEN__
+	inline void ImGui_Server_Init( void ) {}
+	inline void ImGui_Server_OnGui( void ) {}
+	inline void Server_Open( void ) {}
+#else
 	void ImGui_Server_Init();
 	void ImGui_Server_OnGui();
 	void Server_Open();
+#endif
 }

@@ -1555,7 +1555,7 @@ int Con_DrawDebugLines( void )
 
 			count++;
 			y = 20 + fontTall * i;
-#ifdef XASH_IMGUI
+#ifdef XASH_VGUI2
             VGUI2_Surface_DrawConsoleString(x, y, con.notify[i].szNotify, con.notify[i].color[0], con.notify[i].color[1], con.notify[i].color[2], con.notify[i].color[3]);
 #elif defined XASH_IMGUI
 			ImGui_Console_AddGenericString(x, y, con.notify[i].szNotify, con.notify[i].color);
