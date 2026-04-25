@@ -129,6 +129,7 @@ extern imglib_t image;
 
 byte *Image_ResampleInternal( const void *indata, int in_w, int in_h, int out_w, int out_h, int intype, qboolean *done );
 byte *Image_FlipInternal( const byte *in, word *srcwidth, word *srcheight, int type, int flags );
+rgbdata_t *Image_NewTemp( void );
 rgbdata_t *Image_Load(const char *filename, const byte *buffer, size_t buffsize );
 qboolean Image_Copy8bitRGBA( const byte *in, byte *out, int pixels );
 qboolean Image_AddIndexedImageToPack( const byte *in, int width, int height );

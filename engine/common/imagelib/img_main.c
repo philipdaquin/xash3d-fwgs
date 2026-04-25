@@ -220,6 +220,18 @@ static MALLOC_LIKE( FS_FreeImage, 1 ) rgbdata_t *ImagePack( const char *name )
 
 /*
 ================
+Image_NewTemp
+
+Create an empty temporary image package owned by the imagelib pool.
+================
+*/
+rgbdata_t *Image_NewTemp( void )
+{
+	return Mem_Calloc( host.imagepool, sizeof( rgbdata_t ));
+}
+
+/*
+================
 FS_AddSideToPack
 
 ================

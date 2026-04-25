@@ -490,6 +490,7 @@ void Image_Init( void );
 void Image_Shutdown( void );
 void Image_AddCmdFlags( uint flags );
 void FS_FreeImage( rgbdata_t *pack );
+rgbdata_t *Image_NewTemp( void ) MALLOC_LIKE( FS_FreeImage, 1 ) WARN_UNUSED_RESULT;
 rgbdata_t *FS_LoadImage( const char *filename, const byte *buffer, size_t size ) MALLOC_LIKE( FS_FreeImage, 1 ) WARN_UNUSED_RESULT;
 qboolean FS_SaveImage( const char *filename, rgbdata_t *pix );
 rgbdata_t *FS_CopyImage( const rgbdata_t *in ) MALLOC_LIKE( FS_FreeImage, 1 ) WARN_UNUSED_RESULT;
