@@ -12,52 +12,58 @@
 *   without written permission from Valve LLC.
 *
 ****/
-#ifndef ENTITY_STATE_H
+#if !defined( ENTITY_STATE_H )
 #define ENTITY_STATE_H
+#ifdef _WIN32
+#ifndef __MINGW32__
+#pragma once
+#endif /* not __MINGW32__ */
+#endif
 
 // For entityType below
 #define ENTITY_NORMAL		(1<<0)
 #define ENTITY_BEAM			(1<<1)
 
-// Entity state is used for the baseline and for delta compression of a packet of
+// Entity state is used for the baseline and for delta compression of a packet of 
 //  entities that is sent to a client.
 typedef struct entity_state_s entity_state_t;
 
 struct entity_state_s
 {
-// Fields which are filled in by routines outside of delta compression
-	int		entityType;
+	// Fields which are filled in by routines outside of delta compression
+	int			entityType;
 	// Index into cl_entities array for this entity.
-	int		number;
+	int			number;
 	float		msg_time;
 
 	// Message number last time the player/entity state was updated.
-	int		messagenum;
+	int			messagenum;
 
-// Fields which can be transitted and reconstructed over the network stream
+	// Fields which can be transitted and reconstructed over the network stream
 	vec3_t		origin;
 	vec3_t		angles;
 
-	int		modelindex;
-	int		sequence;
+	int			modelindex;
+	int			sequence;
 	float		frame;
-	int		colormap;
+	int			colormap;
 	short		skin;
 	short		solid;
-	int		effects;
+	int			effects;
 	float		scale;
+
 	byte		eflags;
 
 	// Render information
-	int		rendermode;
-	int		renderamt;
+	int			rendermode;
+	int			renderamt;
 	color24		rendercolor;
-	int		renderfx;
+	int			renderfx;
 
-	int		movetype;
+	int			movetype;
 	float		animtime;
 	float		framerate;
-	int		body;
+	int			body;
 	byte		controller[4];
 	byte		blending[4];
 	vec3_t		velocity;
@@ -66,48 +72,48 @@ struct entity_state_s
 	vec3_t		mins;
 	vec3_t		maxs;
 
-	int		aiment;
+	int			aiment;
 	// If owned by a player, the index of that player ( for projectiles ).
-	int		owner;
+	int			owner;
 
 	// Friction, for prediction.
 	float		friction;
 	// Gravity multiplier
 	float		gravity;
 
-// PLAYER SPECIFIC
-	int		team;
-	int		playerclass;
-	int		health;
-	qboolean		spectator;
-	int		weaponmodel;
-	int		gaitsequence;
+	// PLAYER SPECIFIC
+	int			team;
+	int			playerclass;
+	int			health;
+	qboolean	spectator;
+	int         weaponmodel;
+	int			gaitsequence;
 	// If standing on conveyor, e.g.
 	vec3_t		basevelocity;
 	// Use the crouched hull, or the regular player hull.
-	int		usehull;
+	int			usehull;
 	// Latched buttons last time state updated.
-	int		oldbuttons;
+	int			oldbuttons;
 	// -1 = in air, else pmove entity number
-	int		onground;
-	int		iStepLeft;
+	int			onground;
+	int			iStepLeft;
 	// How fast we are falling
 	float		flFallVelocity;
 
 	float		fov;
-	int		weaponanim;
+	int			weaponanim;
 
 	// Parametric movement overrides
-	vec3_t		startpos;
-	vec3_t		endpos;
-	float		impacttime;
-	float		starttime;
+	vec3_t				startpos;
+	vec3_t				endpos;
+	float				impacttime;
+	float				starttime;
 
 	// For mods
-	int		iuser1;
-	int		iuser2;
-	int		iuser3;
-	int		iuser4;
+	int			iuser1;
+	int			iuser2;
+	int			iuser3;
+	int			iuser4;
 	float		fuser1;
 	float		fuser2;
 	float		fuser3;
@@ -122,67 +128,68 @@ struct entity_state_s
 
 typedef struct clientdata_s
 {
-	vec3_t		origin;
-	vec3_t		velocity;
+	vec3_t				origin;
+	vec3_t				velocity;
 
-	int		viewmodel;
-	vec3_t		punchangle;
-	int		flags;
-	int		waterlevel;
-	int		watertype;
-	vec3_t		view_ofs;
-	float		health;
+	int					viewmodel;
+	vec3_t				punchangle;
+	int					flags;
+	int					waterlevel;
+	int					watertype;
+	vec3_t				view_ofs;
+	float				health;
 
-	int		bInDuck;
-	int		weapons; // remove?
+	int					bInDuck;
 
-	int		flTimeStepSound;
-	int		flDuckTime;
-	int		flSwimTime;
-	int		waterjumptime;
+	int					weapons; // knife id & grenade id & zombie id
 
-	float		maxspeed;
+	int					flTimeStepSound;
+	int					flDuckTime;
+	int					flSwimTime;
+	int					waterjumptime;
 
-	float		fov;
-	int		weaponanim;
+	float				maxspeed;
 
-	int		m_iId;
-	int		ammo_shells;
-	int		ammo_nails;
-	int		ammo_cells;
-	int		ammo_rockets;
-	float		m_flNextAttack;
+	float				fov;
+	int					weaponanim;
 
-	int		tfstate;
-	int		pushmsec;
-	int		deadflag;
-	char		physinfo[MAX_PHYSINFO_STRING];
+	int					m_iId;
+	int					ammo_shells;
+	int					ammo_nails;
+	int					ammo_cells;
+	int					ammo_rockets;
+	float				m_flNextAttack;
+
+	int					tfstate;
+
+	int					pushmsec;
+
+	int					deadflag;
+
+	char				physinfo[MAX_PHYSINFO_STRING];
 
 	// For mods
-	int		iuser1;
-	int		iuser2;
-	int		iuser3;
-	int		iuser4;
-	float		fuser1;
-	float		fuser2;
-	float		fuser3;
-	float		fuser4;
-	vec3_t		vuser1;
-	vec3_t		vuser2;
-	vec3_t		vuser3;
-	vec3_t		vuser4;
-
+	int					iuser1;
+	int					iuser2;
+	int					iuser3;
+	int					iuser4;
+	float				fuser1;
+	float				fuser2;
+	float				fuser3;
+	float				fuser4;
+	vec3_t				vuser1;
+	vec3_t				vuser2;
+	vec3_t				vuser3;
+	vec3_t				vuser4;
 } clientdata_t;
 
 #include "weaponinfo.h"
 
-#define MAX_LOCAL_WEAPONS	64	// max weapons that can be predicted on the client
-
 typedef struct local_state_s
 {
-	entity_state_t	playerstate;
-	clientdata_t	client;
-	weapon_data_t	weapondata[MAX_LOCAL_WEAPONS];
+	entity_state_t playerstate;
+	clientdata_t   client;
+	weapon_data_t  weapondata[32];
 } local_state_t;
 
-#endif//ENTITY_STATE_H
+#endif // !ENTITY_STATEH

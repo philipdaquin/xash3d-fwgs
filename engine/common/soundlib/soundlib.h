@@ -17,19 +17,19 @@ GNU General Public License for more details.
 #define SOUNDLIB_H
 
 #include "common.h"
-#include "sound.h"
 
-#define FRAME_SIZE		32768	// must match with mp3 frame size
-#define OUTBUF_SIZE		8192	// don't change!
+#define OUTBUF_SIZE             8192    // don't change!
 
 typedef struct loadwavfmt_s
 {
+	const char *formatstring;
 	const char *ext;
-	qboolean (*loadfunc)( const char *name, const byte *buffer, fs_offset_t filesize );
+	qboolean (*loadfunc)( const char *name, const byte *buffer, size_t filesize );
 } loadwavfmt_t;
 
 typedef struct streamfmt_s
 {
+	const char *formatstring;
 	const char *ext;
 
 	stream_t *(*openfunc)( const char *filename );
@@ -49,7 +49,7 @@ typedef struct sndlib_s
 	int		rate;		// num samples per second (e.g. 11025 - 11 khz)
 	int		width;		// resolution - bum bits divided by 8 (8 bit is 1, 16 bit is 2)
 	int		channels;		// num channels (1 - mono, 2 - stereo)
-	uint		loopstart;	// start looping from
+	int		loopstart;	// start looping from
 	uint		samples;		// total samplecount in sound
 	uint		flags;		// additional sound flags
 	size_t		size;		// sound unpacked size (for bounds checking)
@@ -63,19 +63,18 @@ struct stream_s
 {
 	const streamfmt_t	*format;	// streamformat to operate
 
-	// stream info
+	// current stream state
 	file_t		*file;	// stream file
 	int		width;	// resolution - num bits divided by 8 (8 bit is 1, 16 bit is 2)
 	int		rate;	// stream rate
 	int		channels;	// stream channels
 	int		type;	// wavtype
 	size_t		size;	// total stream size
-
-	// current stream state
+	int		pos;	// actual track position
 	void		*ptr;	// internal decoder state
-	char		temp[OUTBUF_SIZE]; // mpeg decoder stuff
-	size_t		pos;	// actual track position (or actual buffer remains)
+	char temp[OUTBUF_SIZE]; // mpeg decoder stuff
 	int		buffsize;	// cached buffer size
+	qboolean		timejump;	// true if position is changed
 };
 
 /*
@@ -93,33 +92,31 @@ struct stream_s
 
 typedef struct
 {
-	int32_t	riff_id;		// 'RIFF'
-	int32_t	rLen;
-	int32_t	wave_id;		// 'WAVE'
-	int32_t	fmt_id;		// 'fmt '
-	int32_t	pcm_header_len;	// varies...
-	int16_t	wFormatTag;
-	int16_t	nChannels;	// 1,2 for stereo data is (l,r) pairs
-	int32_t	nSamplesPerSec;
-	int32_t	nAvgBytesPerSec;
-	int16_t	nBlockAlign;
-	int16_t	nBitsPerSample;
+	int	riff_id;		// 'RIFF' 
+	int	rLen;
+	int	wave_id;		// 'WAVE' 
+	int	fmt_id;		// 'fmt ' 
+	int	pcm_header_len;	// varies...
+	short	wFormatTag;
+	short	nChannels;	// 1,2 for stereo data is (l,r) pairs 
+	int	nSamplesPerSec;
+	int	nAvgBytesPerSec;
+	short	nBlockAlign;      
+	short	nBitsPerSample;
 } wavehdr_t;
 
 typedef struct
 {
-	int32_t	data_id;		// 'data' or 'fact'
-	int32_t	dLen;
+	int	data_id;		// 'data' or 'fact' 
+	int	dLen;
 } chunkhdr_t;
 
 extern sndlib_t sound;
 //
 // formats load
 //
-qboolean Sound_LoadWAV( const char *name, const byte *buffer, fs_offset_t filesize );
-qboolean Sound_LoadMPG( const char *name, const byte *buffer, fs_offset_t filesize );
-qboolean Sound_LoadOggVorbis( const char *name, const byte *buffer, fs_offset_t filesize );
-qboolean Sound_LoadOggOpus( const char *name, const byte *buffer, fs_offset_t filesize );
+qboolean Sound_LoadWAV( const char *name, const byte *buffer, size_t filesize );
+qboolean Sound_LoadMPG( const char *name, const byte *buffer, size_t filesize );
 
 //
 // stream operate
@@ -134,15 +131,5 @@ int Stream_ReadMPG( stream_t *stream, int bytes, void *buffer );
 int Stream_SetPosMPG( stream_t *stream, int newpos );
 int Stream_GetPosMPG( stream_t *stream );
 void Stream_FreeMPG( stream_t *stream );
-stream_t *Stream_OpenOggVorbis( const char *filename );
-int Stream_ReadOggVorbis( stream_t *stream, int bytes, void *buffer );
-int Stream_SetPosOggVorbis( stream_t *stream, int newpos );
-int Stream_GetPosOggVorbis( stream_t *stream );
-void Stream_FreeOggVorbis( stream_t *stream );
-stream_t *Stream_OpenOggOpus( const char *filename );
-int Stream_ReadOggOpus( stream_t *stream, int bytes, void *buffer );
-int Stream_SetPosOggOpus( stream_t *stream, int newpos );
-int Stream_GetPosOggOpus( stream_t *stream );
-void Stream_FreeOggOpus( stream_t *stream );
 
 #endif//SOUNDLIB_H

@@ -20,6 +20,9 @@ GNU General Public License for more details.
 #define MOVE_NOMONSTERS	1	// ignore monsters (edicts with flags (FL_MONSTER|FL_FAKECLIENT|FL_CLIENT) set)
 #define MOVE_MISSILE	2	// extra size for monsters
 
+#define FMOVE_IGNORE_GLASS	0x100
+#define FMOVE_SIMPLEBOX	0x200
+
 #define CONTENTS_NONE	0	// no custom contents specified
 
 /*
@@ -35,74 +38,42 @@ ENTITY AREA CHECKING
 
 #include "lightstyle.h"
 
+extern const char		*et_name[];
+
+// linked list
+void InsertLinkBefore( link_t *l, link_t *before );
+void RemoveLink( link_t *l );
+void ClearLink( link_t *l );
+
 // trace common
-static inline void World_MoveBounds( const vec3_t start, vec3_t mins, vec3_t maxs, const vec3_t end, vec3_t boxmins, vec3_t boxmaxs )
-{
-	int	i;
+qboolean SV_RecursiveHullCheck( hull_t *hull, int num, float p1f, float p2f, const vec3_t p1, const vec3_t p2, trace_t *trace );
+void World_MoveBounds( const vec3_t start, vec3_t mins, vec3_t maxs, const vec3_t end, vec3_t_ref boxmins, vec3_t_ref boxmaxs );
+void World_TransformAABB( const matrix4x4 &transform, const vec3_t mins, const vec3_t maxs, vec3_t_ref outmins, vec3_t_ref outmaxs );
+trace_t World_CombineTraces( trace_t *cliptrace, trace_t *trace, edict_t *touch );
+int BoxOnPlaneSide( const vec3_t emins, const vec3_t emaxs, const mplane_t *p );
+int RankForContents( int contents );
 
-	for( i = 0; i < 3; i++ )
-	{
-		if( end[i] > start[i] )
-		{
-			boxmins[i] = start[i] + mins[i] - 1.0f;
-			boxmaxs[i] = end[i] + maxs[i] + 1.0f;
-		}
-		else
-		{
-			boxmins[i] = end[i] + mins[i] - 1.0f;
-			boxmaxs[i] = start[i] + maxs[i] + 1.0f;
-		}
-	}
-}
+#define BOX_ON_PLANE_SIDE( emins, emaxs, p )			\
+	((( p )->type < 3 ) ?				\
+	(						\
+		((p)->dist <= (emins)[(p)->type]) ?		\
+			1				\
+		:					\
+		(					\
+			((p)->dist >= (emaxs)[(p)->type]) ?	\
+				2			\
+			:				\
+				3			\
+		)					\
+	)						\
+	:						\
+		BoxOnPlaneSide(( emins ), ( emaxs ), ( p )))
 
-static inline trace_t World_CombineTraces( trace_t *cliptrace, trace_t *trace, edict_t *touch )
-{
-	if( trace->allsolid || trace->startsolid || trace->fraction < cliptrace->fraction )
-	{
-		trace->ent = touch;
-
-		if( cliptrace->startsolid )
-		{
-			*cliptrace = *trace;
-			cliptrace->startsolid = true;
-		}
-		else *cliptrace = *trace;
-	}
-
-	return *cliptrace;
-}
-
-/*
-==================
-RankForContents
-
-Used for determine contents priority
-==================
-*/
-static inline int RankForContents( int contents )
-{
-	switch( contents )
-	{
-	case CONTENTS_EMPTY:	return 0;
-	case CONTENTS_WATER:	return 1;
-	case CONTENTS_TRANSLUCENT:	return 2;
-	case CONTENTS_CURRENT_0:	return 3;
-	case CONTENTS_CURRENT_90:	return 4;
-	case CONTENTS_CURRENT_180:	return 5;
-	case CONTENTS_CURRENT_270:	return 6;
-	case CONTENTS_CURRENT_UP:	return 7;
-	case CONTENTS_CURRENT_DOWN:	return 8;
-	case CONTENTS_SLIME:	return 9;
-	case CONTENTS_LAVA:		return 10;
-	case CONTENTS_SKY:		return 11;
-	case CONTENTS_SOLID:	return 12;
-	default:			return 13; // any user contents has more priority than default
-	}
-}
-
-void World_TransformAABB( matrix4x4 transform, const vec3_t mins, const vec3_t maxs, vec3_t outmins, vec3_t outmaxs );
 
 #define check_angles( x )	( (int)x == 90 || (int)x == 180 || (int)x == 270 || (int)x == -90 || (int)x == -180 || (int)x == -270 )
+
+#include "bspfile.h"
+#include "pm_shared.h"
 
 /*
 ===============================================================================
@@ -132,6 +103,7 @@ typedef struct event_info_s
 typedef struct event_state_s
 {
 	event_info_t	ei[MAX_EVENT_QUEUE];
+	unsigned int cur_event;
 } event_state_t;
-
+	
 #endif//WORLD_H

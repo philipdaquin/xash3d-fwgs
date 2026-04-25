@@ -1,9 +1,9 @@
 /***
 *
 *	Copyright (c) 1996-2002, Valve LLC. All rights reserved.
-*
-*	This product contains software technology licensed from Id
-*	Software, Inc. ("Id Technology").  Id Technology (c) 1996 Id Software, Inc.
+*	
+*	This product contains software technology licensed from Id 
+*	Software, Inc. ("Id Technology").  Id Technology (c) 1996 Id Software, Inc. 
 *	All Rights Reserved.
 *
 *   Use, distribution, and modification of this source code and/or resulting
@@ -16,12 +16,10 @@
 #ifndef PROGDEFS_H
 #define PROGDEFS_H
 
-#include "const.h"
-
-typedef struct
-{
-	float		time;
-	float		frametime;
+typedef struct globalvars_s
+{	
+	time_point_t		time;
+	duration_t		frametime;
 	float		force_retouch;
 	string_t		mapname;
 	string_t		startspot;
@@ -58,12 +56,12 @@ typedef struct entvars_s
 {
 	string_t		classname;
 	string_t		globalname;
-
+	
 	vec3_t		origin;
 	vec3_t		oldorigin;
 	vec3_t		velocity;
 	vec3_t		basevelocity;
-	vec3_t		clbasevelocity;	// Base velocity that was passed in to server physics so
+	vec3_t		clbasevelocity;	// Base velocity that was passed in to server physics so 
 					// client can predict conveyors correctly. Server zeroes it, so we need to store here, too.
 	vec3_t		movedir;
 
@@ -75,8 +73,8 @@ typedef struct entvars_s
 	// For parametric entities
 	vec3_t		endpos;
 	vec3_t		startpos;
-	float		impacttime;
-	float		starttime;
+	time_point_t		impacttime;
+	time_point_t		starttime;
 
 	int		fixangle;		// 0:nothing, 1:force view angles, 2:add avelocity
 	float		idealpitch;
@@ -96,8 +94,8 @@ typedef struct entvars_s
 	vec3_t		maxs;		// local BB max
 	vec3_t		size;		// maxs - mins
 
-	float		ltime;
-	float		nextthink;
+	time_point_t		ltime;
+	time_point_t		nextthink;
 
 	int		movetype;
 	int		solid;
@@ -113,7 +111,7 @@ typedef struct entvars_s
 	int		sequence;		// animation sequence
 	int		gaitsequence;	// movement animation sequence for player (0 for none)
 	float		frame;		// % playback position in animation sequences (0..255)
-	float		animtime;		// world time when frame was set
+	time_point_t		animtime;		// world time when frame was set
 	float		framerate;	// animation playback rate (-8x to 8x)
 	byte		controller[4];	// bone controller setting (0..255)
 	byte		blending[2];	// blending amount between sub-sequences (0..255)
@@ -144,7 +142,7 @@ typedef struct entvars_s
 
 	int		spawnflags;
 	int		flags;
-
+	
 	int		colormap;		// lowbyte topcolor, highbyte bottomcolor
 	int		team;
 
@@ -163,7 +161,7 @@ typedef struct entvars_s
 	float		dmg_take;
 	float		dmg_save;
 	float		dmg;
-	float		dmgtime;
+	time_point_t		dmgtime;
 
 	string_t		noise;
 	string_t		noise1;
@@ -171,9 +169,9 @@ typedef struct entvars_s
 	string_t		noise3;
 
 	float		speed;
-	float		air_finished;
-	float		pain_finished;
-	float		radsuit_finished;
+	time_point_t		air_finished;
+	time_point_t		pain_finished;
+	time_point_t		radsuit_finished;
 
 	edict_t		*pContainingEntity;
 
@@ -203,6 +201,7 @@ typedef struct entvars_s
 	int		iuser2;
 	int		iuser3;
 	int		iuser4;
+
 	float		fuser1;
 	float		fuser2;
 	float		fuser3;

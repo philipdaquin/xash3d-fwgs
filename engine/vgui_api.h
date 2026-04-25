@@ -16,8 +16,6 @@ GNU General Public License for more details.
 #define VGUI_API_H
 
 #include "xash3d_types.h"
-#include "key_modifiers.h"
-#include "cursor_type.h"
 
 // VGUI generic vertex
 
@@ -29,7 +27,7 @@ typedef struct
 
 // C-Style VGUI enums
 
-enum VGUI_MouseCode
+enum class VGUI_MouseCode
 {
 	MOUSE_LEFT=0,
 	MOUSE_RIGHT,
@@ -37,7 +35,7 @@ enum VGUI_MouseCode
 	MOUSE_LAST
 };
 
-enum VGUI_KeyCode
+enum class VGUI_KeyCode
 {
 	KEY_0=0,
 	KEY_1,
@@ -145,19 +143,43 @@ enum VGUI_KeyCode
 	KEY_LAST
 };
 
-enum VGUI_KeyAction
+enum class VGUI_KeyAction
 {
 	KA_TYPED=0,
 	KA_PRESSED,
 	KA_RELEASED
 };
-enum VGUI_MouseAction
+enum class VGUI_MouseAction
 {
 	MA_PRESSED=0,
 	MA_RELEASED,
 	MA_DOUBLE,
 	MA_WHEEL
 };
+
+enum class VGUI_DefaultCursor
+{
+	dc_user,
+	dc_none,
+	dc_arrow,
+	dc_ibeam,
+	dc_hourglass,
+	dc_crosshair,
+	dc_up,
+	dc_sizenwse,
+	dc_sizenesw,
+	dc_sizewe,
+	dc_sizens,
+	dc_sizeall,
+	dc_no,
+	dc_hand,
+	dc_last
+};
+
+
+
+
+
 
 typedef struct  vguiapi_s
 {
@@ -186,18 +208,8 @@ typedef struct  vguiapi_s
 	void	(*Shutdown)( void );
 	void	*(*GetPanel)( void );
 	void	(*Paint)( void );
-	void	(*Mouse)( enum VGUI_MouseAction action, int code );
-	void	(*Key)( enum VGUI_KeyAction action, enum VGUI_KeyCode code );
+	void	(*Mouse)(enum VGUI_MouseAction action, int code );
+	void	(*Key)(enum VGUI_KeyAction action,enum VGUI_KeyCode code );
 	void	(*MouseMove)( int x, int y );
-
-	// void	(*TextInput)( const char *text );
-	// called from engine side
-	// void	(*EnableTextInput)( qboolean enable, qboolean force );
-	// int		(*GetClipboardText)( char *buffer, size_t bufferSize );
-	// void	(*SetClipboardText)( const char *text );
-	// key_modifier_t (*GetKeyModifiers)( void );
-	// void	(*Reserved0)( int id, int width, int height );
-	// void	(*Reserved1)( int id, int drawX, int drawY, const byte *rgba, int blockWidth, int blockHeight );
-
 } vguiapi_t;
 #endif // VGUI_API_H

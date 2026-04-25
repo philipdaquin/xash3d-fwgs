@@ -1,321 +1,288 @@
 /*
-bspfile.h - BSP format included q1, hl1 support
-Copyright (C) 2010 Uncle Mike
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+*
+*    This program is free software; you can redistribute it and/or modify it
+*    under the terms of the GNU General Public License as published by the
+*    Free Software Foundation; either version 2 of the License, or (at
+*    your option) any later version.
+*
+*    This program is distributed in the hope that it will be useful, but
+*    WITHOUT ANY WARRANTY; without even the implied warranty of
+*    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+*    General Public License for more details.
+*
+*    You should have received a copy of the GNU General Public License
+*    along with this program; if not, write to the Free Software Foundation,
+*    Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+*
+*    In addition, as a special exception, the author gives permission to
+*    link the code of this program with the Half-Life Game Engine ("HL
+*    Engine") and Modified Game Libraries ("MODs") developed by Valve,
+*    L.L.C ("Valve").  You must obey the GNU General Public License in all
+*    respects for all of the code used other than the HL Engine and MODs
+*    from Valve.  If you modify this file, you may extend this exception
+*    to your version of the file, but you are not obligated to do so.  If
+*    you do not wish to do so, delete this exception statement from your
+*    version.
+*
 */
+
 #ifndef BSPFILE_H
 #define BSPFILE_H
+#ifdef _WIN32
+#pragma once
+#endif
 
-#include <stdint.h>
-#include "xash3d_types.h"
-
-/*
-==============================================================================
-
-BRUSH MODELS
-
-.bsp contain level static geometry with including PVS and lightning info
-==============================================================================
-*/
 
 // header
-#define Q1BSP_VERSION 29 // quake1 regular version (beta is 28)
-#define HLBSP_VERSION 30 // half-life regular version
-#define QBSP2_VERSION (( 'B' << 0 ) | ('S' << 8 ) | ( 'P' << 16 ) | ( '2' << 24 ))
+#define Q1BSP_VERSION	29	// quake1 regular version (beta is 28)
+#define HLBSP_VERSION	30	// half-life regular version
+#define XTBSP_VERSION	31	// extended lightmaps and expanded clipnodes limit
 
-#define IDEXTRAHEADER (( 'X' << 0 ) | ('A' << 8 ) | ( 'S' << 16 ) | ( 'H' << 24 ))
-#define EXTRA_VERSION 4 // ver. 1 was occupied by old versions of XashXT
-                        // ver. 2 was occupied by old vesrions of P2:savior
-                        // ver. 3 was occupied by experimental versions of P2:savior change fmt
+#define IDEXTRAHEADER	(('H'<<24)+('S'<<16)+('A'<<8)+'X') // little-endian "XASH"
+#define EXTRA_VERSION	2 // because version 1 was occupied by old versions of XashXT
 
-#define DELUXEMAP_VERSION 1
-#define IDDELUXEMAPHEADER (( 'Q' << 0 ) | ('L' << 8 ) | ( 'I' << 16 ) | ( 'T' << 24 ))
+#define DELUXEMAP_VERSION	1
+#define IDDELUXEMAPHEADER	(('T'<<24)+('I'<<16)+('L'<<8)+'Q') // little-endian "QLIT"
+
+#define BSPVERSION			30
 
 // worldcraft predefined angles
-#define ANGLE_UP   -1
-#define ANGLE_DOWN -2
+#define ANGLE_UP			-1
+#define ANGLE_DOWN			-2
 
 // bmodel limits
-#define MAX_MAP_HULLS 4	 // MAX_HULLS
+#define MAX_MAP_HULLS		4		// MAX_HULLS
 
-#define SURF_PLANEBACK      BIT( 1 ) // plane should be negated
-#define SURF_DRAWSKY        BIT( 2 ) // sky surface
-#define SURF_DRAWTURB_QUADS BIT( 3 ) // all subidivided polygons are quads
-#define SURF_DRAWTURB       BIT( 4 ) // warp surface
-#define SURF_DRAWTILED      BIT( 5 ) // face without lighmap
-#define SURF_CONVEYOR       BIT( 6 ) // scrolled texture (was SURF_DRAWBACKGROUND)
-#define SURF_UNDERWATER     BIT( 7 ) // caustics
-#define SURF_TRANSPARENT    BIT( 8 ) // it's a transparent texture (was SURF_DONTWARP)
+#define SURF_NOCULL			BIT( 0 )		// two-sided polygon (e.g. 'water4b')
+#define SURF_PLANEBACK		BIT( 1 )		// plane should be negated
+#define SURF_DRAWSKY		BIT( 2 )		// sky surface
+#define SURF_WATERCSG		BIT( 3 )		// culled by csg (was SURF_DRAWSPRITE)
+#define SURF_DRAWTURB		BIT( 4 )		// warp surface
+#define SURF_DRAWTILED		BIT( 5 )		// face without lighmap
+#define SURF_CONVEYOR		BIT( 6 )		// scrolled texture (was SURF_DRAWBACKGROUND)
+#define SURF_UNDERWATER		BIT( 7 )		// caustics
+#define SURF_TRANSPARENT		BIT( 8 )		// it's a transparent texture (was SURF_DONTWARP)
+
+#define SURF_REFLECT		BIT( 31 )		// reflect surface (mirror)
+
+#define CONTENTS_ORIGIN			-7		// removed at csg time
+#define CONTENTS_CLIP			-8		// changed to contents_solid
+#define CONTENTS_CURRENT_0		-9
+#define CONTENTS_CURRENT_90		-10
+#define CONTENTS_CURRENT_180		-11
+#define CONTENTS_CURRENT_270		-12
+#define CONTENTS_CURRENT_UP		-13
+#define CONTENTS_CURRENT_DOWN		-14
+
+#define CONTENTS_TRANSLUCENT		-15
 
 // lightstyle management
-#define LM_STYLES 4 // MAXLIGHTMAPS
-#define LS_NORMAL 0x00
-#define LS_UNUSED 0xFE
-#define LS_NONE   0xFF
+#define LM_STYLES			4		// MAXLIGHTMAPS
+#define LS_NORMAL			0x00
+#define LS_UNUSED			0xFE
+#define LS_NONE			0xFF
 
-#define MAX_MAP_CLIPNODES_HLBSP 32767
-#define MAX_MAP_CLIPNODES_BSP2  524288
+#define MAX_MAP_MODELS		1024		// can be increased up to 2048 if needed
+#define MAX_MAP_BRUSHES		32768		// unsigned short limit
+#define MAX_MAP_ENTITIES		8192		// can be increased up to 32768 if needed
+#define MAX_MAP_ENTSTRING		0x80000		// 512 kB should be enough
+#define MAX_MAP_PLANES		65536		// can be increased without problems
+#define MAX_MAP_NODES		32767		// because negative shorts are leafs
+#define MAX_MAP_CLIPNODES		32767		// because negative shorts are contents
+#define MAX_MAP_LEAFS		32767		// signed short limit
+#define MAX_MAP_VERTS		65535		// unsigned short limit
+#define MAX_MAP_FACES		65535		// unsigned short limit
+#define MAX_MAP_MARKSURFACES		65535		// unsigned short limit
+#define MAX_MAP_TEXINFO		MAX_MAP_FACES	// in theory each face may have personal texinfo
+#define MAX_MAP_EDGES		0x100000		// can be increased but not needed
+#define MAX_MAP_SURFEDGES		0x200000		// can be increased but not needed
+#define MAX_MAP_TEXTURES		2048		// can be increased but not needed
+#define MAX_MAP_MIPTEX		0x2000000		// 32 Mb internal textures data
+#define MAX_MAP_LIGHTING		0x2000000		// 32 Mb lightmap raw data (can contain deluxemaps)
+#define MAX_MAP_VISIBILITY		0x800000		// 8 Mb visdata
 
-// these limis not using by modelloader but only for displaying 'mapstats' correctly
-#define MAX_MAP_MODELS       2048                   // embedded models
-#define MAX_MAP_ENTSTRING    0x200000               // 2 Mb should be enough
-#define MAX_MAP_PLANES       131072                 // can be increased without problems
-#define MAX_MAP_NODES        262144                 // can be increased without problems
-#define MAX_MAP_CLIPNODES    MAX_MAP_CLIPNODES_BSP2 // can be increased without problems
-#define MAX_MAP_LEAFS        131072                 // CRITICAL STUFF to run ad_sepulcher!!!
-#define MAX_MAP_VERTS        524288                 // can be increased without problems
-#define MAX_MAP_FACES        262144                 // can be increased without problems
-#define MAX_MAP_MARKSURFACES 524288                 // can be increased without problems
+#define LUMP_ENTITIES			0
+#define LUMP_PLANES			1
+#define LUMP_TEXTURES			2
+#define LUMP_VERTEXES			3
+#define LUMP_VISIBILITY			4
+#define LUMP_NODES			5
+#define LUMP_TEXINFO			6
+#define LUMP_FACES			7
+#define LUMP_LIGHTING			8
+#define LUMP_CLIPNODES			9
+#define LUMP_LEAFS			10
+#define LUMP_MARKSURFACES		11
+#define LUMP_EDGES			12
+#define LUMP_SURFEDGES			13
+#define LUMP_MODELS			14
 
-#define MAX_MAP_ENTITIES   8192           // network limit
-#define MAX_MAP_TEXINFO    MAX_MAP_FACES  // in theory each face may have personal texinfo
-#define MAX_MAP_EDGES      0x100000       // can be increased but not needed
-#define MAX_MAP_SURFEDGES  0x200000       // can be increased but not needed
-#define MAX_MAP_TEXTURES   2048           // can be increased but not needed
-#define MAX_MAP_MIPTEX     0x2000000      // 32 Mb internal textures data
-#define MAX_MAP_LIGHTING   0x2000000      // 32 Mb lightmap raw data (can contain deluxemaps)
-#define MAX_MAP_VISIBILITY 0x1000000      // 16 Mb visdata
-#define MAX_MAP_FACEINFO   8192           // can be increased but not needed
+#define HEADER_LUMPS			15
 
-// quake lump ordering
-enum
-{
-	LUMP_ENTITIES     = 0,
-	LUMP_PLANES       = 1,
-	LUMP_TEXTURES     = 2,  // internal textures
-	LUMP_VERTEXES     = 3,
-	LUMP_VISIBILITY   = 4,
-	LUMP_NODES        = 5,
-	LUMP_TEXINFO      = 6,
-	LUMP_FACES        = 7,
-	LUMP_LIGHTING     = 8,
-	LUMP_CLIPNODES    = 9,
-	LUMP_LEAFS        = 10,
-	LUMP_MARKSURFACES = 11,
-	LUMP_EDGES        = 12,
-	LUMP_SURFEDGES    = 13,
-	LUMP_MODELS       = 14, // internal submodels
-	HEADER_LUMPS      = 15,
-};
+// version 31
+#define LUMP_CLIPNODES2		15		// hull0 goes into LUMP_NODES, hull1 goes into LUMP_CLIPNODES,
+#define LUMP_CLIPNODES3		16		// hull2 goes into LUMP_CLIPNODES2, hull3 goes into LUMP_CLIPNODES3
 
-// extra lump ordering
-enum
-{
-	LUMP_LIGHTVECS     = 0,  // deluxemap data
-	LUMP_FACEINFO      = 1,  // landscape and lightmap resolution info
-	LUMP_CUBEMAPS      = 2,  // cubemap description
-	LUMP_VERTNORMALS   = 3,  // phong shaded vertex normals
-	LUMP_LEAF_LIGHTING = 4,  // store vertex lighting for statics
-	LUMP_WORLDLIGHTS   = 5,  // list of all the virtual and real lights (used to relight models in-game)
-	LUMP_COLLISION     = 6,  // physics engine collision hull dump (userdata)
-	LUMP_AINODEGRAPH   = 7,  // node graph that stored into the bsp (userdata)
-	LUMP_SHADOWMAP     = 8,  // contains shadow map for direct light
-	LUMP_VERTEX_LIGHT  = 9,  // store vertex lighting for statics
-	LUMP_UNUSED0       = 10, // one lump reserved for me
-	LUMP_UNUSED1       = 11, // one lump reserved for me
-	EXTRA_LUMPS        = 12, // count of the extra lumps
-};
+#define HEADER_LUMPS_31	17
+
+#define LUMP_FACES_EXTRADATA	0	// extension of dface_t
+#define LUMP_VERTS_EXTRADATA	1	// extension of dvertex_t
+#define LUMP_CUBEMAPS	2	// cubemap description
+
+#define EXTRA_LUMPS	8	// g-cont. just for future expansions
 
 // texture flags
-#define TEX_SPECIAL        BIT( 0 ) // sky or slime, no lightmap or 256 subdivision
-#define TEX_WORLD_LUXELS   BIT( 1 ) // alternative lightmap matrix will be used (luxels per world units instead of luxels per texels)
-#define TEX_AXIAL_LUXELS   BIT( 2 ) // force world luxels to axial positive scales
-#define TEX_EXTRA_LIGHTMAP BIT( 3 ) // bsp31 legacy - using 8 texels per luxel instead of 16 texels per luxel
-#define TEX_SCROLL         BIT( 6 ) // Doom special FX
-
-#define IsLiquidContents( cnt )	( cnt == CONTENTS_WATER || cnt == CONTENTS_SLIME || cnt == CONTENTS_LAVA )
+#define TEX_SPECIAL			BIT( 0 )		// sky or slime, no lightmap or 256 subdivision
 
 // ambient sound types
 enum
 {
-	AMBIENT_WATER = 0, // waterfall
-	AMBIENT_SKY,       // wind
-	AMBIENT_SLIME,     // never used in quake
-	AMBIENT_LAVA,      // never used in quake
-	NUM_AMBIENTS,      // automatic ambient sounds
+	AMBIENT_WATER = 0,		// waterfall
+	AMBIENT_SKY,		// wind
+	AMBIENT_SLIME,		// never used in quake
+	AMBIENT_LAVA,		// never used in quake
+	NUM_AMBIENTS,		// automatic ambient sounds
 };
 
 //
 // BSP File Structures
 //
+
+/* <a1fc> ../engine/bspfile.h:41 */
 typedef struct
 {
-	int32_t fileofs;
-	int32_t filelen;
+	int	fileofs;
+	int	filelen;
 } dlump_t;
 
 typedef struct
 {
-	int32_t version;
-	dlump_t lumps[HEADER_LUMPS];
-} dheader_t;
+	int	version;
+	dlump_t	lumps[HEADER_LUMPS_31];
+} dheader31_t;
 
 typedef struct
 {
-	int32_t id; // must be little endian XASH
-	int32_t version;
+	int	id; // must be little endian XASH
+	int	version;
 	dlump_t lumps[EXTRA_LUMPS];
 } dextrahdr_t;
 
-typedef struct
+/* <a2c2> ../engine/bspfile.h:73 */
+typedef struct dheader_s
 {
-	vec3_t  mins;
-	vec3_t  maxs;
-	vec3_t  origin;                  // for sounds or lights
-	int32_t headnode[MAX_MAP_HULLS];
-	int32_t visleafs;                // not including the solid leaf 0
-	int32_t firstface;
-	int32_t numfaces;
+	int version;
+	dlump_t lumps[15];
+
+} dheader_t;
+
+/* <a22c> ../engine/bspfile.h:64 */
+typedef struct dmodel_s
+{
+	float mins[3], maxs[3];
+	float origin[3];
+	int headnode[MAX_MAP_HULLS];
+	int visleafs;			// not including the solid leaf 0
+	int firstface, numfaces;
+
 } dmodel_t;
 
-typedef struct
+/* <485b2> ../engine/bspfile.h:79 */
+typedef struct dmiptexlump_s
 {
-	int32_t nummiptex;
-	int32_t dataofs[4]; // [nummiptex]
+	int _nummiptex;
+	int dataofs[4];
+
 } dmiptexlump_t;
 
-typedef struct
+/* <1ce18> ../engine/bspfile.h:86 */
+typedef struct miptex_s
 {
-	vec3_t  point;
+	char name[16];
+	unsigned width;
+	unsigned height;
+	unsigned offsets[4];
+
+} miptex_t;
+
+/* <48652> ../engine/bspfile.h:94 */
+typedef struct dvertex_s
+{
+	float point[3];
+
 } dvertex_t;
 
-typedef struct
+/* <48674> ../engine/bspfile.h:110 */
+typedef struct dplane_s
 {
-	vec3_t  normal;
-	float   dist;
-	int32_t type; // PLANE_X - PLANE_ANYZ ?
+	float normal[3];
+	float dist;
+	int type;
+
 } dplane_t;
 
-typedef struct
+/* <486b2> ../engine/bspfile.h:132 */
+typedef struct dnode_s
 {
-	int32_t  planenum;
-	int16_t  children[2]; // negative numbers are -(leafs + 1), not nodes
-	int16_t  mins[3];     // for sphere culling
-	int16_t  maxs[3];
-	uint16_t firstface;
-	uint16_t numfaces;    // counting both sides
+	int planenum;
+	short children[2];
+	short mins[3];
+	short maxs[3];
+	unsigned short firstface;
+	unsigned short numfaces;
+
 } dnode_t;
 
-typedef struct
+typedef struct dleaf_s
 {
-	int32_t planenum;
-	int32_t children[2]; // negative numbers are -(leafs+1), not nodes
-	float   mins[3];     // for sphere culling
-	float   maxs[3];
-	int32_t firstface;
-	int32_t numfaces;    // counting both sides
-} dnode32_t;
+	int contents;
+	int visofs;
+	short mins[3];
+	short maxs[3];
+	unsigned short firstmarksurface;
+	unsigned short nummarksurfaces;
+	byte ambient_level[4];
 
-// leaf 0 is the generic CONTENTS_SOLID leaf, used for all solid areas
-// all other leafs need visibility info
-typedef struct
-{
-	int32_t  contents;
-	int32_t  visofs;                      // -1 = no visibility info
-
-	int16_t  mins[3];                     // for frustum culling
-	int16_t  maxs[3];
-	uint16_t firstmarksurface;
-	uint16_t nummarksurfaces;
-
-	// automatic ambient sounds
-	uint8_t  ambient_level[NUM_AMBIENTS]; // ambient sound level (0 - 255)
 } dleaf_t;
 
-typedef struct
+/* <a332> ../engine/bspfile.h:142 */
+typedef struct dclipnode_s
 {
-	int32_t contents;
-	int32_t visofs;                       // -1 = no visibility info
+	int planenum;
+	short children[2];	// negative numbers are contents
 
-	float   mins[3];                      // for frustum culling
-	float   maxs[3];
-
-	int32_t firstmarksurface;
-	int32_t nummarksurfaces;
-
-	uint8_t ambient_level[NUM_AMBIENTS];
-} dleaf32_t;
-
-typedef struct
-{
-	int32_t planenum;
-	int16_t children[2]; // negative numbers are contents
 } dclipnode_t;
 
-typedef struct
+/* <4876a> ../engine/bspfile.h:149 */
+typedef struct dtexinfo_s
 {
-	int32_t planenum;
-	int32_t children[2]; // negative numbers are contents
-} dclipnode32_t;
+	float vecs[2][4];
+	int miptex;
+	int flags;
 
-typedef struct
-{
-	float   vecs[2][4]; // texmatrix [s/t][xyz offset]
-	int32_t miptex;
-	int16_t flags;
-	int16_t faceinfo;   // -1 no face info otherwise dfaceinfo_t
 } dtexinfo_t;
 
-typedef struct
+typedef word	dmarkface_t;		// leaf marksurfaces indexes
+typedef int	dsurfedge_t;		// map surfedges
+
+/* <487c2> ../engine/bspfile.h:159 */
+typedef struct dedge_s
 {
-	char     landname[16]; // name of decsription in mapname_land.txt
-	uint16_t texture_step; // default is 16, pixels\luxels ratio
-	uint16_t max_extent;   // default is 16, subdivision step ((texture_step * max_extent) - texture_step)
-	int16_t  groupid;      // to determine equal landscapes from various groups, -1 - no group
-} dfaceinfo_t;
+	unsigned short v[2];
 
-typedef uint16_t dmarkface_t;   // leaf marksurfaces indexes
-typedef int32_t  dmarkface32_t; // leaf marksurfaces indexes
-
-typedef int32_t dsurfedge_t; // map surfedges
-
-// NOTE: that edge 0 is never used, because negative edge nums
-// are used for counterclockwise use of the edge in a face
-typedef struct
-{
-	uint16_t v[2]; // vertex numbers
 } dedge_t;
 
-typedef struct
+/* <487f2> ../engine/bspfile.h:165 */
+typedef struct dface_s
 {
-	int32_t  v[2]; // vertex numbers
-} dedge32_t;
+	short planenum;
+	short side;
+	int firstedge;
+	short numedges;
+	short texinfo;
+	byte styles[4];
+	int lightofs;
 
-typedef struct
-{
-	uint16_t planenum;
-	int16_t  side;
-
-	int32_t  firstedge;         // we must support > 64k edges
-	int16_t  numedges;
-	int16_t  texinfo;
-
-	// lighting info
-	uint8_t  styles[LM_STYLES];
-	int32_t  lightofs;          // start of [numstyles*surfsize] samples
 } dface_t;
-
-typedef struct
-{
-	int32_t planenum;
-	int32_t side;
-
-	int32_t firstedge;          // we must support > 64k edges
-	int32_t numedges;
-	int32_t texinfo;
-
-	// lighting info
-	uint8_t styles[LM_STYLES];
-	int32_t lightofs;           // start of [numstyles*surfsize] samples
-} dface32_t;
 
 #endif // BSPFILE_H

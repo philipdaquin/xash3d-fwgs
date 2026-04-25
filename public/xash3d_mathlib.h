@@ -22,16 +22,7 @@ GNU General Public License for more details.
 #endif
 #include <string.h>
 
-#include "build.h"
 #include "xash3d_types.h"
-
-/*
-===========================
-
-CONSTANTS AND HELPER MACROS
-
-===========================
-*/
 
 // euler angle order
 #define PITCH 0
@@ -72,7 +63,7 @@ CONSTANTS AND HELPER MACROS
 
 #define INV127F          ( 1.0f / 127.0f )
 #define INV255F          ( 1.0f / 255.0f )
-#define MAKE_SIGNED( x ) ((( x ) * INV127F ) - 1.0f )
+#define MAKE_SIGNED( x ) ((( x ) * INV127F ) - 1.0f)
 
 #define Q_min( a, b ) (((a) < (b)) ? (a) : (b))
 #define Q_max( a, b ) (((a) > (b)) ? (a) : (b))
@@ -132,13 +123,6 @@ CONSTANTS AND HELPER MACROS
 #define PlaneDiff(point,plane) (((plane)->type < 3 ? (point)[(plane)->type] : DotProduct((point), (plane)->normal)) - (plane)->dist)
 #define bound( min, num, max ) ((num) >= (min) ? ((num) < (max) ? (num) : (max)) : (min))
 
-/*
-===========================
-
-CONSTANTS GLOBALS
-
-===========================
-*/
 // a1ba: we never return pointers to these globals
 // so help compiler optimize constants away
 #ifndef __cplusplus
@@ -148,18 +132,11 @@ CONSTANTS GLOBALS
 extern const int       boxpnt[6][4];
 extern const float     m_bytenormals[NUMVERTEXNORMALS][3];
 
-
-/*
-===========================
-
-MATH FUNCTIONS
-
-===========================
-*/
 typedef struct mplane_s mplane_t;
+#ifndef MSTUDIO_TYPES_DEFINED
 typedef struct mstudiobone_s mstudiobone_t;
 typedef struct mstudioanim_s mstudioanim_t;
-
+#endif
 float Q_rsqrt( float number );
 uint16_t FloatToHalf( float v );
 float HalfToFloat( uint16_t h );
@@ -182,9 +159,6 @@ int BoxOnPlaneSide( const vec3_t emins, const vec3_t emaxs, const mplane_t *p );
 		)                                              \
 	) : BoxOnPlaneSide(( emins ), ( emaxs ), ( p )))
 
-//
-// matrixlib.c
-//
 static inline void Matrix3x4_LoadIdentity( matrix3x4 m )
 {
 	memset( m, 0, sizeof( matrix3x4 ));
@@ -218,9 +192,6 @@ void Matrix4x4_ConvertToEntity( const matrix4x4 in, vec3_t angles, vec3_t origin
 void Matrix4x4_Invert_Simple( matrix4x4 out, const matrix4x4 in1 );
 qboolean Matrix4x4_Invert_Full( matrix4x4 out, const matrix4x4 in1 );
 
-// horrible cast but helps not breaking strict aliasing in mathlib
-// as union type punning should be fine in C but not in C++
-// so don't carry over this to C++ code
 #ifndef __cplusplus
 typedef union
 {
@@ -258,11 +229,13 @@ static inline float UintAsFloat( uint32_t u )
 static inline float SwapFloat( float bf )
 {
 	uint32_t bi = FloatAsUint( bf );
-	uint32_t li = Swap32( bi );
+	uint32_t li = (( bi & 0x000000FFU ) << 24 ) |
+		(( bi & 0x0000FF00U ) << 8 ) |
+		(( bi & 0x00FF0000U ) >> 8 ) |
+		(( bi & 0xFF000000U ) >> 24 );
 	return UintAsFloat( li );
 }
 
-// isnan implementation is broken on IRIX as reported in https://github.com/FWGS/xash3d-fwgs/pull/1211
 #if defined( XASH_IRIX ) || !defined( isnan )
 static inline int IS_NAN( float x )
 {
@@ -273,7 +246,6 @@ static inline int IS_NAN( float x )
 #define IS_NAN isnan
 #endif
 #endif // __cplusplus
-
 
 static inline float anglemod( float a )
 {
@@ -325,7 +297,7 @@ static inline float VectorNormalizeLength2( const vec3_t v, vec3_t out )
 	return length;
 }
 
-static inline void GAME_EXPORT AngleVectors( const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up )
+static inline void AngleVectors( const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up )
 {
 	float	sr, sp, sy, cr, cp, cy;
 
@@ -357,7 +329,6 @@ static inline void GAME_EXPORT AngleVectors( const vec3_t angles, vec3_t forward
 
 static inline void ClearBounds( vec3_t mins, vec3_t maxs )
 {
-	// make bogus range
 	mins[0] = mins[1] = mins[2] =  999999.0f;
 	maxs[0] = maxs[1] = maxs[2] = -999999.0f;
 }

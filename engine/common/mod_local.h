@@ -16,200 +16,133 @@ GNU General Public License for more details.
 #ifndef MOD_LOCAL_H
 #define MOD_LOCAL_H
 
-//#include "common.h"
+#include "common.h"
+#include "bspfile.h"
 #include "edict.h"
 #include "eiface.h"
-#include "ref_api.h"
-#include "studio.h"
+#include "com_model.h"
 
-#define LM_SAMPLE_SIZE		16
-#define LM_SAMPLE_EXTRASIZE		8
+// 1/32 epsilon to keep floating point happy
+#define DIST_EPSILON		(1.0f / 32.0f)
+#define FRAC_EPSILON		(1.0f / 1024.0f)
+#define BACKFACE_EPSILON		0.01f
+#define MAX_BOX_LEAFS		256
+#define DVIS_PVS			0
+#define DVIS_PHS			1
+#define ANIM_CYCLE			2
 
-#define MAX_MAP_WADS		256	// max wads that can be referenced per one map
+// remapping info
+#define SUIT_HUE_START		192
+#define SUIT_HUE_END		223
+#define PLATE_HUE_START		160
+#define PLATE_HUE_END		191
 
-#define CHECKVISBIT( vis, b )		((b) >= 0 ? (byte)((vis)[(b) >> 3] & (1 << ((b) & 7))) : (byte)false )
-#define SETVISBIT( vis, b )( void )	((b) >= 0 ? (byte)((vis)[(b) >> 3] |= (1 << ((b) & 7))) : (byte)false )
-#define CLEARVISBIT( vis, b )( void )	((b) >= 0 ? (byte)((vis)[(b) >> 3] &= ~(1 << ((b) & 7))) : (byte)false )
+#define LM_SAMPLE_SIZE		world.lm_sample_size	// lightmap resoultion
 
-#define FATPVS_RADIUS		8.0f	// FatPVS use radius smaller than the FatPHS
-#define FATPHS_RADIUS		8.0f	// see SV_AddToFatPAS in GoldSrc
+#define SURF_INFO( surf, mod )	((mextrasurf_t *)mod->cache.data + (surf - mod->surfaces)) 
+#define INFO_SURF( surf, mod )	(mod->surfaces + (surf - (mextrasurf_t *)mod->cache.data)) 
 
-#define WORLD_INDEX			(1)	// world index is always 1
-
-typedef struct consistency_s
-{
-	const char	*filename;
-	int		orig_index;
-	int		check_type;
-	qboolean		issound;
-	int		value;
-	vec3_t		mins;
-	vec3_t		maxs;
-} consistency_t;
-
-#define FCRC_SHOULD_CHECKSUM	BIT( 0 )
-#define FCRC_CHECKSUM_DONE	BIT( 1 )
-
-typedef struct
-{
-	int		flags;
-	CRC32_t		initialCRC;
-} model_info_t;
-
-// values for model_t's needload
-#define NL_UNREFERENCED 0
-#define NL_NEEDS_LOADED 1
-#define NL_PRESENT      2
-#define NL_FREE_UNUSED  3 // this model can be freed after sequence precaching is done
-
-typedef struct hullnode_s
-{
-	struct hullnode_s	*next;
-	struct hullnode_s	*prev;
-} hullnode_t;
-
-typedef struct winding_s
-{
-	const mplane_t	*plane;
-	struct winding_s	*pair;
-	hullnode_t	chain;
-	int		numpoints;
-	vec3_t		p[];		// variable sized
-} winding_t;
-
-typedef struct
-{
-	hullnode_t	polys;
-	uint		num_polys;
-} hull_model_t;
+// model flags (stored in model_t->flags)
+#define MODEL_CONVEYOR		BIT( 0 )
+#define MODEL_HAS_ORIGIN		BIT( 1 )
+#define MODEL_LIQUID		BIT( 2 )	// model has only point hull
 
 typedef struct wadlist_s
 {
-	char wadnames[MAX_MAP_WADS][36]; // including .wad extension
-	int  wadusage[MAX_MAP_WADS];
-	int  count;
+	char		wadnames[256][32];
+	int		count;
 } wadlist_t;
 
-typedef struct world_static_s
+typedef struct leaflist_s
 {
+	int		count;
+	int		maxcount;
+	qboolean		overflowed;
+	short		*list;
+	vec3_t		mins, maxs;
+	int		topnode;		// for overflows where each leaf can't be stored individually
+} leaflist_t;
+
+typedef struct
+{
+	int		version;		// bsp version
+	int		mapversion;	// map version (an key-value in worldspawn settings)
+	uint		checksum;		// current map checksum
+	int		load_sequence;	// increace each map change
+	vec3_t		hull_sizes[MAX_MAP_HULLS];	// actual hull sizes
+	msurface_t	**draw_surfaces;	// used for sorting translucent surfaces
+	int		max_surfaces;	// max surfaces per submodel (for all models)
+	size_t		visdatasize;	// actual size of the visdata
+	size_t		litdatasize;	// actual size of the lightdata
+	size_t		vecdatasize;	// actual size of the deluxdata
+	size_t		entdatasize;	// actual size of the entity string
+	size_t		texdatasize;	// actual size of the textures lump
 	qboolean		loading;		// true if worldmodel is loading
-	int		flags;		// misc flags
-
-	// mapstats info
-	char		message[2048];	// just for debug
-	char		compiler[256];	// map compiler
-	char		generator[256];	// map editor
-
-	hull_model_t	*hull_models;
-	int		num_hull_models;
-
-	// out pointers to light data
+	qboolean		sky_sphere;	// true when quake sky-sphere is used
+	qboolean		has_mirrors;	// one or more brush models contain reflective textures
+	int		lm_sample_size;	// defaulting to 16 (BSP31 uses 8)
+	int		block_size;	// lightmap blocksize
 	color24		*deluxedata;	// deluxemap data pointer
-	byte		*shadowdata;	// occlusion data pointer
+	char		message[2048];	// just for debug
 
-	// visibility info
-	size_t		visbytes;		// cluster size
-	size_t		fatbytes;		// fatpvs size
-
-	// world bounds
 	vec3_t		mins;		// real accuracy world bounds
 	vec3_t		maxs;
 	vec3_t		size;
-
-	// tree visualization stuff
-	int		recursion_level;
-	int		max_recursion;
-
-	uint32_t version; // BSP version
-
-	// Potentially Hearable Set
-	byte   *compressed_phs;
-	size_t *phsofs;
-
-	wadlist_t wadlist;
 } world_static_t;
 
-#ifndef REF_DLL
-extern world_static_t world;
-extern poolhandle_t   com_studiocache;
-extern convar_t       mod_studiocache;
-extern convar_t       r_wadtextures;
-extern convar_t       r_showhull;
-extern convar_t       r_allow_wad3_luma;
-extern const mclipnode16_t box_clipnodes16[6];
-extern const mclipnode32_t box_clipnodes32[6];
+extern world_static_t	world;
+extern mempool_t		*com_studiocache;
+extern mempool_t		*mempool_mdl;
+extern model_t		*loadmodel;
+extern convar_t		*mod_studiocache;
+extern int		bmodel_version;	// only actual during loading
 
 //
 // model.c
 //
 void Mod_Init( void );
-void Mod_FreeModel( model_t *mod );
-void Mod_FreeAll( void );
+void Mod_ClearAll( qboolean keep_playermodel );
 void Mod_Shutdown( void );
 void Mod_ClearUserData( void );
-model_t *Mod_LoadWorld( const char *name, qboolean preload );
+void Mod_PrintBSPFileSizes( void );
+void Mod_SetupHulls( vec3_t mins[MAX_MAP_HULLS], vec3_t maxs[MAX_MAP_HULLS] );
+void Mod_GetBounds( int handle, vec3_t_ref mins, vec3_t_ref maxs );
+void Mod_GetFrames( int handle, int *numFrames );
+void Mod_LoadWorld( const char *name, uint *checksum, qboolean multiplayer );
+void Mod_FreeUnused( void );
 void *Mod_Calloc( int number, size_t size );
 void *Mod_CacheCheck( struct cache_user_s *c );
 void Mod_LoadCacheFile( const char *path, struct cache_user_s *cu );
-void *Mod_AliasExtradata( model_t *mod );
-void *Mod_StudioExtradata( model_t *mod );
-model_t *Mod_FindName( const char *name, qboolean trackCRC );
-model_t *Mod_LoadModel( model_t *mod, qboolean crash );
-model_t *Mod_ForName( const char *name, qboolean crash, qboolean trackCRC );
-qboolean Mod_ValidateCRC( const char *name, CRC32_t crc );
-void Mod_NeedCRC( const char *name, qboolean needCRC );
-void Mod_FreeUnused( void );
-
-//
-// mod_alias.c
-//
-void Mod_LoadAliasModel( model_t *mod, const void *buffer, qboolean *loaded );
-
-//
-// mod_bmodel.c
-//
-void Mod_LoadBrushModel( model_t *mod, void *buffer, size_t buffersize, qboolean *loaded );
-qboolean Mod_TestBmodelLumps( file_t *f, const char *name, byte *mod_base, size_t buffersize, qboolean silent, dlump_t *entities );
-int Mod_FatPVS( const vec3_t org, float radius, byte *visbuffer, int visbytes, qboolean merge, qboolean fullvis, qboolean phs );
+void *Mod_Extradata( model_t *mod );
+model_t *Mod_FindName( const char *name, qboolean create );
+model_t *Mod_LoadModel( model_t *mod, qboolean world );
+model_t *Mod_ForName( const char *name, qboolean world );
+qboolean Mod_RegisterModel( const char *name, int index );
+int Mod_PointLeafnum( const vec3_t p );
+byte *Mod_LeafPVS( mleaf_t *leaf, model_t *model );
+byte *Mod_LeafPHS( mleaf_t *leaf, model_t *model );
+mleaf_t *Mod_PointInLeaf( const vec3_t p, mnode_t *node );
+void Mod_TesselatePolygon( msurface_t *surf, model_t *mod, float tessSize );
+int Mod_BoxLeafnums( const vec3_t mins, const vec3_t maxs, short *list, int listsize, int *lastleaf );
 qboolean Mod_BoxVisible( const vec3_t mins, const vec3_t maxs, const byte *visbits );
-int Mod_CheckLump( const char *filename, const int lump, int *lumpsize );
-int Mod_ReadLump( const char *filename, const int lump, void **lumpdata, int *lumpsize );
-int Mod_SaveLump( const char *filename, const int lump, void *lumpdata, int lumpsize );
-mleaf_t *Mod_PointInLeaf( const vec3_t p, mnode_t *node, model_t *mod );
-int Mod_SampleSizeForFace( const msurface_t *surf );
-byte *Mod_GetPVSForPoint( const vec3_t p );
-void Mod_UnloadBrushModel( model_t *mod );
-void Mod_PrintWorldStats_f( void );
-
-//
-// mod_dbghulls.c
-//
-void R_DrawWorldHull( void );
-void R_DrawModelHull( model_t *mod );
-void Mod_ReleaseHullPolygons( void );
+void Mod_BuildSurfacePolygons( msurface_t *surf, mextrasurf_t *info );
+void Mod_AmbientLevels( const vec3_t p, byte *pvolumes );
+byte *Mod_CompressVis( const byte *in, size_t *size );
+byte *Mod_DecompressVis( const byte *in );
+modtype_t Mod_GetType( int handle );
+model_t *Mod_Handle( int handle );
+struct wadlist_s *Mod_WadList( void );
 
 //
 // mod_studio.c
 //
-void Mod_LoadStudioModel( model_t *mod, const void *buffer, qboolean *loaded );
-void Mod_UnloadStudioModel( model_t *mod );
 void Mod_InitStudioAPI( void );
 void Mod_InitStudioHull( void );
 void Mod_ResetStudioAPI( void );
-const char *Mod_StudioTexName( const char *modname );
-qboolean Mod_GetStudioBounds( const char *name, vec3_t mins, vec3_t maxs );
-void Mod_StudioGetAttachment( const edict_t *e, int iAttachment, float *org, float *ang );
-void Mod_GetBonePosition( const edict_t *e, int iBone, float *org, float *ang );
-hull_t *Mod_HullForStudio( model_t *m, float frame, int seq, vec3_t ang, vec3_t org, vec3_t size, byte *pcnt, byte *pbl, int *hitboxes, edict_t *ed );
-void *R_StudioGetAnim( studiohdr_t *m_pStudioHeader, model_t *m_pSubModel, mstudioseqdesc_t *pseqdesc );
-void Mod_StudioComputeBounds( void *buffer, vec3_t mins, vec3_t maxs, qboolean ignore_sequences );
+qboolean Mod_GetStudioBounds( const char *name, vec3_t_ref mins, vec3_t_ref maxs );
+void Mod_StudioGetAttachment( const edict_t *e, int iAttachment, vec3_t_ref org, vec3_t_ref ang );
+void Mod_GetBonePosition( const edict_t *e, int iBone, vec3_t_ref org, vec3_t_ref ang );
+hull_t *Mod_HullForStudio( model_t *m, float frame, int seq, const vec3_t ang, const vec3_t org, const vec3_t size, byte *pcnt, byte *pbl, int *hitboxes, edict_t *ed );
 int Mod_HitgroupForStudioHull( int index );
-void Mod_ClearStudioCache( void );
-
-//
-// mod_sprite.c
-//
-void Mod_LoadSpriteModel( model_t *mod, const void *buffer, size_t buffersize, qboolean *loaded );
-#endif
 
 #endif//MOD_LOCAL_H

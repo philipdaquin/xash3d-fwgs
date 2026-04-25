@@ -17,7 +17,6 @@ GNU General Public License for more details.
 #define DEFAULTS_H
 
 #include "backends.h"
-#include "build.h"
 
 /*
 ===================================================================
@@ -26,87 +25,74 @@ SETUP BACKENDS DEFINITIONS
 
 ===================================================================
 */
-//
-// when compiling client, we need to pick video, audio and input implementations
-//
-#if !XASH_DEDICATED // when compiling client, we need to pick video, audio and input implementations
-	#if XASH_SDL // we are building with SDL
-		#define XASH_VIDEO     VIDEO_SDL
-		#define XASH_INPUT     INPUT_SDL
-		#define XASH_SOUND     SOUND_SDL
-	#elif XASH_LINUX // we are building for Linux without SDL, only framebuffer is supported for now
-		#define XASH_VIDEO     VIDEO_FBDEV
-		#define XASH_INPUT     INPUT_EVDEV
-		#define XASH_SOUND     SOUND_ALSA
-		#define XASH_USE_EVDEV 1
-	#elif XASH_DOS4GW
-		#define XASH_VIDEO     VIDEO_DOS
-		#define XASH_REDUCE_FD 1 // usually only 10-20 fds available
-	#elif XASH_PSP
-		#define XASH_VIDEO     VIDEO_PSP
-		#define XASH_INPUT     INPUT_PSP
-		#define XASH_SOUND     SOUND_PSP
-		#define XASH_REDUCE_FD 1
-		#define XASH_NO_TOUCH  1
-		#define XASH_NO_ZIP    1
-	#endif
-#endif // !XASH_DEDICATED
+#ifndef XASH_DEDICATED
 
-//
-// select messagebox implementation
-//
-#ifndef XASH_MESSAGEBOX
-	#if XASH_SDL >= 2 && !XASH_NSWITCH // SDL2 messageboxes are not available on NSW
-		#define XASH_MESSAGEBOX MSGBOX_SDL
-	#elif XASH_WIN32
-		#define XASH_MESSAGEBOX MSGBOX_WIN32
-	#elif XASH_NSWITCH
-		#define XASH_MESSAGEBOX MSGBOX_NSWITCH
-	#elif XASH_PSP
-		#define XASH_MESSAGEBOX MSGBOX_PSP
-	#else // !XASH_WIN32
-		#define XASH_MESSAGEBOX MSGBOX_STDERR
-	#endif // !XASH_WIN32
-#endif // XASH_MESSAGEBOX
+	#ifdef XASH_SDL
 
-//
-// no timer - no xash
-//
-#ifndef XASH_TIMER
-	#if XASH_SDL >= 2
-		#define XASH_TIMER TIMER_SDL
-	#elif XASH_WIN32
-		#define XASH_TIMER TIMER_WIN32
-	#elif XASH_DOS4GW
-		#define XASH_TIMER TIMER_DOS
-	#elif XASH_PSP
-		#define XASH_TIMER TIMER_PSP
-	#else // !XASH_WIN32
-		#define XASH_TIMER TIMER_POSIX
-	#endif // !XASH_WIN32
-#endif
+		// by default, use SDL subsystems
+		#ifndef XASH_VIDEO
+			#define XASH_VIDEO VIDEO_SDL
+		#endif // XASH_VIDEO
 
-//
-// determine movie playback backend
-//
-#ifndef XASH_AVI
-	#if HAVE_FFMPEG
-		#define XASH_AVI AVI_FFMPEG
+		#ifndef XASH_TIMER
+			#define XASH_TIMER TIMER_SDL
+		#endif
+
+		#ifndef XASH_INPUT
+			#define XASH_INPUT INPUT_SDL
+		#endif
+
+		#ifndef XASH_SOUND
+			#define XASH_SOUND SOUND_SDL
+		#endif
+
+	#endif //XASH_SDL
+
+	#if defined __ANDROID__ && !defined XASH_SDL
+
+		#ifndef XASH_VIDEO
+			#define XASH_VIDEO VIDEO_ANDROID
+		#endif
+
+		#ifndef XASH_TIMER
+			#define XASH_TIMER TIMER_LINUX
+		#endif
+
+		#ifndef XASH_INPUT
+			#define XASH_INPUT INPUT_ANDROID
+		#endif
+
+		#ifndef XASH_SOUND
+			#define XASH_SOUND SOUND_OPENSLES
+		#endif
+	#endif // android case
+
+    #if defined XASH_ANGLE
+        #define XASH_EGL
+    #endif
+
+#endif // XASH_DEDICATED
+
+// select crashhandler based on defines
+#ifndef XASH_CRASHHANDLER
+	#ifdef _WIN32
+		#ifdef DBGHELP
+			#define XASH_CRASHHANDLER CRASHHANDLER_DBGHELP
+		#endif
+	#elif defined CRASHHANDLER
+		#define XASH_CRASHHANDLER CRASHHANDLER_UCONTEXT
 	#else
-		#define XASH_AVI AVI_NULL
+		#define XASH_CRASHHANDLER CRASHHANDLER_NULL
 	#endif
 #endif
 
-#if XASH_PSP
-	#define XASH_PSP LIB_PSP
-#elif defined( XASH_STATIC_LIBS )
-	#define XASH_LIB LIB_STATIC
-	#define XASH_INTERNAL_GAMELIBS
-	#define XASH_ALLOW_SAVERESTORE_OFFSETS
-#elif XASH_WIN32
-	#define XASH_LIB LIB_WIN32
-#elif XASH_POSIX
-	#define XASH_LIB LIB_POSIX
+// no timer - no xash
+#ifndef XASH_TIMER
+	#ifdef _WIN32
+		#define XASH_TIMER TIMER_WIN32
+	#else
+		#define XASH_TIMER TIMER_LINUX
+	#endif
 #endif
 
 //
@@ -114,15 +100,15 @@ SETUP BACKENDS DEFINITIONS
 //
 #ifndef XASH_VIDEO
 	#define XASH_VIDEO VIDEO_NULL
-#endif // XASH_VIDEO
+#endif
 
 #ifndef XASH_SOUND
 	#define XASH_SOUND SOUND_NULL
-#endif // XASH_SOUND
+#endif
 
 #ifndef XASH_INPUT
 	#define XASH_INPUT INPUT_NULL
-#endif // XASH_INPUT
+#endif
 
 /*
 =========================================================================
@@ -132,70 +118,54 @@ Default build-depended cvar and constant values
 =========================================================================
 */
 
-// Platform overrides
-#if XASH_NSWITCH
+#if defined __ANDROID__ || TARGET_OS_IPHONE || defined __SAILFISH__
 	#define DEFAULT_TOUCH_ENABLE "1"
-	#define DEFAULT_M_IGNORE     "1"
-	#define DEFAULT_MODE_WIDTH   1280
-	#define DEFAULT_MODE_HEIGHT  720
-	#define DEFAULT_ALLOWCONSOLE 1
-#elif XASH_PSVITA
-	#define DEFAULT_TOUCH_ENABLE "1"
-	#define DEFAULT_M_IGNORE     "1"
-	#define DEFAULT_MODE_WIDTH   960
-	#define DEFAULT_MODE_HEIGHT  544
-	#define DEFAULT_ALLOWCONSOLE 1
-#elif XASH_ANDROID
-	#define DEFAULT_TOUCH_ENABLE "1"
-#elif XASH_MOBILE_PLATFORM
-	#define DEFAULT_TOUCH_ENABLE "1"
-	#define DEFAULT_M_IGNORE     "1"
-#endif // !XASH_MOBILE_PLATFORM && !XASH_NSWITCH
-
-// Defaults
-#ifndef DEFAULT_TOUCH_ENABLE
+	#define DEFAULT_M_IGNORE "1"
+	#define DEFAULT_SLEEPTIME "1"
+#else
 	#define DEFAULT_TOUCH_ENABLE "0"
-#endif // DEFAULT_TOUCH_ENABLE
-
-#ifndef DEFAULT_M_IGNORE
 	#define DEFAULT_M_IGNORE "0"
-#endif // DEFAULT_M_IGNORE
+	#define DEFAULT_SLEEPTIME "0"
+#endif
 
-#ifndef DEFAULT_JOY_DEADZONE
-	#define DEFAULT_JOY_DEADZONE "4096"
-#endif // DEFAULT_JOY_DEADZONE
+#if defined __ANDROID__ || TARGET_OS_IPHONE || defined __SAILFISH__ || defined __EMSCRIPTEN__ || defined XASH_STATIC_GAMELIB
+// this means that libraries are provided with engine, but not in game data
+// You need add library loading code to library.c when adding new platform
+#define XASH_INTERNAL_GAMELIBS
+#endif
 
+#if defined XASH_NANOGL || defined XASH_WES || defined XASH_REGAL || defined XASH_GL4ES
+#ifndef XASH_GLES
+#define XASH_GLES
+#endif // XASH_GLES
+#ifndef XASH_GL_STATIC
+#define XASH_GL_STATIC
+#endif // XASH_GL_STATIC
+#endif // XASH_NANOGL || XASH_WES || XASH_REGAL
+
+#define DEFAULT_PRIMARY_MASTER "ms.xash.su:27010"
+#define DEFAULT_SECONDARY_MASTER "ms2.xash.su:27010"
+// Set ForceSimulating to 1 by default for dedicated, because AMXModX timers require this
+// TODO: enable simulating for any server?
+#ifdef XASH_DEDICATED
+	#define DEFAULT_SV_FORCESIMULATING "1"
+#else
+	#define DEFAULT_SV_FORCESIMULATING "0"
+#endif
+
+// allow override for developer/debug builds
 #ifndef DEFAULT_DEV
 	#define DEFAULT_DEV 0
-#endif // DEFAULT_DEV
-
-#ifndef DEFAULT_ALLOWCONSOLE
-	#define DEFAULT_ALLOWCONSOLE 0
-#endif // DEFAULT_ALLOWCONSOLE
+#endif
 
 #ifndef DEFAULT_FULLSCREEN
-	#define DEFAULT_FULLSCREEN "2" // must be a string
-#endif // DEFAULT_FULLSCREEN
+#define DEFAULT_FULLSCREEN 1
+#endif
 
-#ifndef DEFAULT_MAX_EDICTS
-	#define DEFAULT_MAX_EDICTS 1200 // was 900 before HL25
-#endif // DEFAULT_MAX_EDICTS
-
-
-#ifndef DEFAULT_ACCELERATED_RENDERER
-	#if XASH_PSP
-		#define DEFAULT_ACCELERATED_RENDERER "gu"
-	#elif XASH_MOBILE_PLATFORM
-		#define DEFAULT_ACCELERATED_RENDERER "gles1"
-	#elif XASH_IOS
-		#define DEFAULT_ACCELERATED_RENDERER "gles2"
-	#else // !XASH_MOBILE_PLATFORM
-		#define DEFAULT_ACCELERATED_RENDERER "gl"
-	#endif // !XASH_MOBILE_PLATFORM
-#endif // DEFAULT_ACCELERATED_RENDERER
-
-#ifndef DEFAULT_SOFTWARE_RENDERER
-	#define DEFAULT_SOFTWARE_RENDERER "soft" // mittorn's ref_soft
-#endif // DEFAULT_SOFTWARE_RENDERER
+#if TARGET_OS_IPHONE
+	#define DEFAULT_CON_MAXFRAC "0.5"
+#else
+	#define DEFAULT_CON_MAXFRAC "1"
+#endif
 
 #endif // DEFAULTS_H

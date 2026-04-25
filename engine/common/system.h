@@ -16,8 +16,12 @@ GNU General Public License for more details.
 #ifndef SYSTEM_H
 #define SYSTEM_H
 
-#ifdef __cplusplus
-extern "C" {
+
+
+#ifdef __GNUC__
+#define _format(x) __attribute__((format(printf, x, x+1)))
+#else
+#define _format(x)
 #endif
 
 #include "port.h"
@@ -25,12 +29,32 @@ extern "C" {
 #include <setjmp.h>
 #include <stdio.h>
 #include <time.h>
+
+#ifdef XASH_SDL
+#include <SDL_messagebox.h>
+
+#define MSGBOX( x )		SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "CSMoE Error", x, NULL )
+#define MSGBOX2( x )	SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "Host Error", x, NULL )
+#define MSGBOX3( x )	SDL_ShowSimpleMessageBox( SDL_MESSAGEBOX_ERROR, "Host Recursive Error", x, NULL )
+#elif defined(__ANDROID__) && !defined(XASH_DEDICATED)
+#define MSGBOX( x ) 	Android_MessageBox("CSMoE Error", x )
+#define MSGBOX2( x )	Android_MessageBox("Host Error", x )
+#define MSGBOX3( x )	Android_MessageBox("Host Recursive Error", x )
+#elif defined _WIN32
+#define MSGBOX( x ) 	MessageBox( NULL, x, "CSMoE Error", MB_OK|MB_SETFOREGROUND|MB_ICONSTOP )
+#define MSGBOX2( x )	MessageBox( host.hWnd, x, "Host Error", MB_OK|MB_SETFOREGROUND|MB_ICONSTOP )
+#define MSGBOX3( x )	MessageBox( host.hWnd, x, "Host Recursive Error", MB_OK|MB_SETFOREGROUND|MB_ICONSTOP )
+#else
+#define BORDER1 "======================================\n"
+#define MSGBOX( x )		fprintf(stderr, BORDER1 "CSMoE Error: %s\n" BORDER1,x)
+#define MSGBOX2( x )	fprintf(stderr, BORDER1 "Host Error: %s\n" BORDER1,x)
+#define MSGBOX3( x )	fprintf(stderr, BORDER1 "Host Recursive Error: %s\n" BORDER1,x)
+#endif
+
 #include "xash3d_types.h"
 #include "const.h"
-#include "crtlib.h"
-#include "platform/platform.h"
 
-#define ASSERT( exp )	if(!( exp )) Sys_Error( "assert failed at %s:%i\n", __FILE__, __LINE__ )
+#define ASSERT( exp )	if(!( exp )) Sys_Break( "assert failed at %s:%i\n", __FILE__, __LINE__ )
 
 /*
 ========================================================================
@@ -41,49 +65,78 @@ NOTE: never change this structure because all dll descriptions in xash code
 writes into struct by offsets not names
 ========================================================================
 */
+typedef struct dllfunc_s
+{
+	const char	*name;
+	void		**func;
+} dllfunc_t;
+
 typedef struct dll_info_s
 {
-	const char      *name;	// name of library
-	const dllfunc_t *fcts;	// list of dll exports
-	const size_t    num_fcts;
-	qboolean        crash;	// crash if dll not found
-	void            *link;	// hinstance of loading library
+	const char	*name;	// name of library
+	const dllfunc_t	*fcts;	// list of dll exports	
+	qboolean		crash;	// crash if dll not found
+	void		*link;	// hinstance of loading library
 } dll_info_t;
 
-extern int error_on_exit;
-double GAME_EXPORT Sys_DoubleTime( void ); // only for binary compatibility, use Platform_DoubleTime instead
-float GAME_EXPORT Sys_FloatTime( void ); // only for binary compatibility, use Platform_DoubleTime instead
+void Sys_Sleep( unsigned int msec );
+double Sys_DoubleTime( void );
 char *Sys_GetClipboardData( void );
-const char *Sys_GetCurrentUser( void );
+char *Sys_GetCurrentUser( void );
 int Sys_CheckParm( const char *parm );
-void Sys_Warn( const char *format, ... ) FORMAT_CHECK( 1 );
-void Sys_Error( const char *error, ... ) FORMAT_CHECK( 1 );
+void Sys_Error( const char *format, ... ) _format(1);
+void Sys_Break( const char *format, ... ) _format(1);
+void Sys_Warn( const char *format, ... ) _format(1);
 qboolean Sys_LoadLibrary( dll_info_t *dll );
+void* Sys_GetProcAddress( dll_info_t *dll, const char* name );
 qboolean Sys_FreeLibrary( dll_info_t *dll );
-void Sys_ParseCommandLine( int argc, char **argv );
-void Sys_DebugBreak( void );
+void Sys_ParseCommandLine( int argc , const char **argv);
+void Sys_MergeCommandLine();
+void Sys_SetupCrashHandler( void );
+void Sys_RestoreCrashHandler( void );
+void Sys_SetClipboardData( const byte *buffer, size_t size );
 #define Sys_GetParmFromCmdLine( parm, out ) _Sys_GetParmFromCmdLine( parm, out, sizeof( out ))
 qboolean _Sys_GetParmFromCmdLine( const char *parm, char *out, size_t size );
-qboolean Sys_GetIntFromCmdLine( const char *parm, int *out );
+void Sys_ShellExecute( const char *path, const char *parms, qboolean exit );
+void Sys_SendKeyEvents( void );
+qboolean Sys_CheckMMX( void );
+qboolean Sys_CheckSSE( void );
 void Sys_Print( const char *pMsg );
-void Sys_Quit( const char *reason ) NORETURN;
-qboolean Sys_NewInstance( const char *gamedir, const char *finalmsg );
-void *Sys_GetNativeObject( const char *obj );
+void Sys_PrintLog( const char *pMsg );
+void Sys_InitLog( void );
+void Sys_CloseLog( void );
+void Sys_Quit( void );
+int Sys_LogFileNo( void );
+void Sys_LowMemory();
 
 //
 // sys_con.c
 //
 char *Sys_Input( void );
 void Sys_DestroyConsole( void );
-void Sys_CloseLog( const char *finalmsg );
+void Sys_CloseLog( void );
 void Sys_InitLog( void );
 void Sys_PrintLog( const char *pMsg );
 int Sys_LogFileNo( void );
 
-// text messages
-#define Msg	Con_Printf
+//
+// con_win.c
+//
+void Wcon_ShowConsole( qboolean show );
+void Wcon_Print( const char *pMsg );
+void Wcon_Init( void );
+void Wcon_CreateConsole( void );
+void Wcon_DestroyConsole( void );
+void Wcon_DisableInput( void );
+void Wcon_Clear( void );
+char *Wcon_Input( void );
 
-#ifdef __cplusplus
+// text messages
+namespace xe {
+void Msg( const char *pMsg, ... ) _format(1);
+void MsgDev( int level, const char *pMsg, ... ) _format(2);
 }
-#endif
+using xe::Msg;
+using xe::MsgDev;
+
 #endif//SYSTEM_H

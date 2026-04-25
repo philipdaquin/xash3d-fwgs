@@ -16,16 +16,14 @@ GNU General Public License for more details.
 #ifndef LIGHTSTYLE_H
 #define LIGHTSTYLE_H
 
-#include "xash3d_types.h"
-
 typedef struct
 {
 	char		pattern[256];
 	float		map[256];
 	int		length;
 	float		value;
-	qboolean		interp;		// allow to interpolate this lightstyle
-	float		time;		// local time is gurantee what new style begins from the start, not mid or end of the sequence
+	int		interp;		// allow to interpolate this lightstyle (duration in 0.1 secs)
+	float		time;		// local time warranties that new style begins from the start, not mid or end of the sequence
 } lightstyle_t;
 
 #endif//LIGHTSTYLE_H

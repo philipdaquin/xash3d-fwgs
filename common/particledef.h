@@ -1,9 +1,9 @@
 /***
 *
 *	Copyright (c) 1996-2002, Valve LLC. All rights reserved.
-*
-*	This product contains software technology licensed from Id
-*	Software, Inc. ("Id Technology").  Id Technology (c) 1996 Id Software, Inc.
+*	
+*	This product contains software technology licensed from Id 
+*	Software, Inc. ("Id Technology").  Id Technology (c) 1996 Id Software, Inc. 
 *	All Rights Reserved.
 *
 *   Use, distribution, and modification of this source code and/or resulting
@@ -12,15 +12,16 @@
 *   without written permission from Valve LLC.
 *
 ****/
-
-#ifndef PARTICLEDEF_H
+#if !defined( PARTICLEDEF_H )
 #define PARTICLEDEF_H
+#ifdef _WIN32
+#ifndef __MINGW32__
+#pragma once
+#endif /* not __MINGW32__ */
+#endif
 
-#include "xash3d_types.h"
-
-typedef enum
-{
-	pt_static,
+typedef enum {
+	pt_static, 
 	pt_grav,
 	pt_slowgrav,
 	pt_fire,
@@ -30,14 +31,18 @@ typedef enum
 	pt_blob2,
 	pt_vox_slowgrav,
 	pt_vox_grav,
-	pt_clientcustom	// Must have callback function specified
+	pt_clientcustom,   // Must have callback function specified
+	pt_tracer		// Always have callback
 } ptype_t;
 
+// !!! if this is changed, it must be changed in d_ifacea.h too !!!
 typedef struct particle_s
 {
+// driver-usable fields
 	vec3_t		org;
 	short		color;
 	short		packedColor;
+// drivers never touch the following fields
 	struct particle_s	*next;
 	vec3_t		vel;
 	float		ramp;
@@ -47,9 +52,9 @@ typedef struct particle_s
 
 	// for pt_clientcusttom, we'll call this function each frame
 	void		(*callback)( struct particle_s *particle, float frametime );
-
+	
 	// For deathfunc, etc.
-	unsigned char	context;
+	unsigned char context;
 } particle_t;
 
-#endif//PARTICLEDEF_H
+#endif
