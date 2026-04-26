@@ -125,6 +125,12 @@ static void *VGui_GetPanel( void )
 
 extern "C" EXPORT void InitAPI(vguiapi_t * api)
 {
+#ifdef INTERNAL_VGUI_SUPPORT
+	std::printf( "ENGINE SIDE Initializing VGUI Support API via InitVGUISupportAPI (internal client module)\n" );
+#else
+	std::printf( "ENGINE SIDE Initializing VGUI Support API via InitAPI (external vgui_support module)\n" );
+#endif
+
 	g_api = api;
 	g_api->Startup = VGui_Startup;
 	g_api->Shutdown = VGui_Shutdown;

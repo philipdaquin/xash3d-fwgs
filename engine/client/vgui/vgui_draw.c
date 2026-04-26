@@ -37,7 +37,6 @@ typedef struct vgui_static_s
 {
 	qboolean initialized;
 	VGUI_DefaultCursor cursor;
-	vguiapi_t dllFuncs;
 
 	vgui_reusable_texture_t *textures;
 	int texture_id;
@@ -382,7 +381,7 @@ void VGui_RegisterCvars( void )
 	Cvar_RegisterVariable( &vgui_utf8 );
 }
 
-static const vguiapi_t gEngfuncs =
+static const vguiapi_t gDefaultEngfuncs =
 {
 	.initialized = false, // Not initialized yet
 	.DrawInit = VGUI_DrawInit,
@@ -412,14 +411,22 @@ static const vguiapi_t gEngfuncs =
 	.Mouse = NULL,
 	.Key = NULL,
 	.MouseMove = NULL,
+	.TextInput = NULL,
 };
+
+static vguiapi_t gEngfuncs;
+
+static void VGUI_ResetAPI( void )
+{
+	gEngfuncs = gDefaultEngfuncs;
+}
 
 qboolean VGui_LoadProgs( HINSTANCE hInstance )
 {
 	void (*F)( vguiapi_t* );
 	qboolean client = hInstance != NULL;
 
-	vgui.dllFuncs = gEngfuncs;
+	VGUI_ResetAPI();
 
 	// not loading interface from client.dll, load vgui_support.dll instead
 	if( !client )
@@ -452,9 +459,10 @@ qboolean VGui_LoadProgs( HINSTANCE hInstance )
 
 	if( F )
 	{
-		F( &vgui.dllFuncs );
+		Con_Reportf( "%s: calling %s from %s module with gEngfuncs\n", __func__, client ? "InitVGUISupportAPI" : "InitAPI", client ? "client" : "support" );
+		F( &gEngfuncs );
 
-		vgui.initialized = vgui.dllFuncs.initialized = true;
+		vgui.initialized = gEngfuncs.initialized = true;
 		Con_Reportf( "%s: initialized legacy API in %s module\n", __func__, client ? "client" : "support" );
 
 		return true;
@@ -480,15 +488,16 @@ void VGui_Startup( int width, int height )
 
 	if( !vgui.initialized )
 	{
-		vgui.dllFuncs = gEngfuncs;
+		VGUI_ResetAPI();
 
 		if( clgame.hInstance )
 		{
 			F = COM_GetProcAddress( clgame.hInstance, "InitVGUISupportAPI" );
 			if( F )
 			{
-				F( &vgui.dllFuncs );
-				vgui.initialized = vgui.dllFuncs.initialized = true;
+				Con_Reportf( "%s: calling InitVGUISupportAPI from client module with gEngfuncs\n", __func__ );
+				F( &gEngfuncs );
+				vgui.initialized = gEngfuncs.initialized = true;
 				Con_Reportf( "%s: initialized VGUI support API from client module\n", __func__ );
 			}
 		}
@@ -509,8 +518,8 @@ void VGui_Startup( int width, int height )
 	else if( width <= 1280 ) width = 1280;
 	else if( width <= 1600 ) width = 1600;
 
-	if( vgui.dllFuncs.Startup )
-		vgui.dllFuncs.Startup( width, height );
+	if( gEngfuncs.Startup )
+		gEngfuncs.Startup( width, height );
 }
 
 
@@ -524,15 +533,16 @@ Unload vgui_support library and call VGui_Shutdown
 */
 void VGui_Shutdown( void )
 {
-	if( vgui.dllFuncs.Shutdown )
-		vgui.dllFuncs.Shutdown();
+	if( gEngfuncs.Shutdown )
+		gEngfuncs.Shutdown();
 
 	if( vgui.hInstance )
 		COM_FreeLibrary( vgui.hInstance );
 
 	// drop pointers to now unloaded vgui_support
-	vgui.dllFuncs = gEngfuncs;
+	VGUI_ResetAPI();
 	vgui.initialized = false;
+	gEngfuncs.initialized = false;
 	vgui.hInstance = NULL;
 }
 
@@ -665,7 +675,7 @@ void VGui_MouseEvent( int key, int clicks )
 	enum VGUI_MouseAction mact;
 	enum VGUI_MouseCode   code;
 
-	if( !vgui.dllFuncs.Mouse )
+	if( !gEngfuncs.Mouse )
 		return;
 
 	switch( key )
@@ -683,22 +693,22 @@ void VGui_MouseEvent( int key, int clicks )
 	else
 		mact = MA_RELEASED;
 
-	vgui.dllFuncs.Mouse( mact, code );
+	gEngfuncs.Mouse( mact, code );
 }
 
 void VGui_MWheelEvent( int y )
 {
-	if( !vgui.dllFuncs.Mouse )
+	if( !gEngfuncs.Mouse )
 		return;
 
-	vgui.dllFuncs.Mouse( MA_WHEEL, y );
+	gEngfuncs.Mouse( MA_WHEEL, y );
 }
 
 void VGui_KeyEvent( int key, int down )
 {
 	enum VGUI_KeyCode code;
 
-	if( !vgui.dllFuncs.Key )
+	if( !gEngfuncs.Key )
 		return;
 
 	if(( code = VGUI_MapKey( key )) < 0 )
@@ -706,26 +716,26 @@ void VGui_KeyEvent( int key, int down )
 
 	if( down )
 	{
-		vgui.dllFuncs.Key( KA_PRESSED, code );
-		vgui.dllFuncs.Key( KA_TYPED, code );
+		gEngfuncs.Key( KA_PRESSED, code );
+		gEngfuncs.Key( KA_TYPED, code );
 	}
-	else vgui.dllFuncs.Key( KA_RELEASED, code );
+	else gEngfuncs.Key( KA_RELEASED, code );
 }
 
 void VGui_MouseMove( int x, int y )
 {
-	if( vgui.dllFuncs.MouseMove )
+	if( gEngfuncs.MouseMove )
 	{
 		float xscale = (float)refState.width / (float)clgame.scrInfo.iWidth;
 		float yscale = (float)refState.height / (float)clgame.scrInfo.iHeight;
-		vgui.dllFuncs.MouseMove( x / xscale, y / yscale );
+		gEngfuncs.MouseMove( x / xscale, y / yscale );
 	}
 }
 
 void VGui_Paint( void )
 {
-	if( vgui.dllFuncs.Paint )
-		vgui.dllFuncs.Paint();
+	if( gEngfuncs.Paint )
+		gEngfuncs.Paint();
 }
 
 void VGui_UpdateInternalCursorState( VGUI_DefaultCursor cursorType )
@@ -735,13 +745,13 @@ void VGui_UpdateInternalCursorState( VGUI_DefaultCursor cursorType )
 
 void *GAME_EXPORT VGui_GetPanel( void )
 {
-	if( vgui.dllFuncs.GetPanel )
-		return vgui.dllFuncs.GetPanel();
+	if( gEngfuncs.GetPanel )
+		return gEngfuncs.GetPanel();
 	return NULL;
 }
 
 void VGui_ReportTextInput( const char *text )
 {
-	if( vgui.dllFuncs.TextInput )
-		vgui.dllFuncs.TextInput( text );
+	if( gEngfuncs.TextInput )
+		gEngfuncs.TextInput( text );
 }
