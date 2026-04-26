@@ -144,7 +144,9 @@ void Image_CopyPalette32bit( void );
 void Image_SetPixelFormat( void );
 void Image_GetPaletteQ1( void );
 void Image_GetPaletteHL( void );
+const bpc_desc_t *Image_GetPFDesc( int idx );
 size_t Image_ComputeSize( int type, int width, int height, int depth );
+size_t Image_CalcImageSize( int type, int width, int height, int depth );
 void Image_GenerateMipmaps( const byte *source, int width, int height, byte *mip1, byte *mip2, byte *mip3 );
 
 //

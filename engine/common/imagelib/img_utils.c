@@ -1502,6 +1502,11 @@ size_t Image_ComputeSize( int type, int width, int height, int depth )
 	return 0;
 }
 
+size_t Image_CalcImageSize( int type, int width, int height, int depth )
+{
+	return Image_ComputeSize( type, width, height, depth );
+}
+
 /*
 ============
 Image_GenerateMipmaps

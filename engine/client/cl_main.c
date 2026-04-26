@@ -3641,6 +3641,8 @@ void CL_Init( void )
 		Host_Error( "can't initialize %s: %s\n", libpath, COM_GetLibraryError( ));
 	}
 
+	VGui_Startup( refState.width, refState.height );
+
 	Con_Printf( "===== vgui2...==== \n" );
 
 	if( clgame.dllFuncs.pfnVGui2_Startup ) {

@@ -232,6 +232,21 @@ rgbdata_t *Image_NewTemp( void )
 
 /*
 ================
+Image_GetPFDesc
+
+Expose pixelformat metadata through the imagelib API.
+================
+*/
+const bpc_desc_t *Image_GetPFDesc( int idx )
+{
+	if( idx < 0 || idx >= PF_TOTALCOUNT )
+		idx = PF_UNKNOWN;
+
+	return &PFDesc[idx];
+}
+
+/*
+================
 FS_AddSideToPack
 
 ================

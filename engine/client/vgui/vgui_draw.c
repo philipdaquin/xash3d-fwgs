@@ -24,6 +24,8 @@ GNU General Public License for more details.
 #include "platform/platform.h"
 
 #define VGUI_MAX_TEXTURES 1024
+#define VGUI_GL_NONE 0
+#define VGUI_GL_TEXTURE_2D 0x0DE1
 
 typedef struct vgui_reusable_texture_s
 {
@@ -211,14 +213,20 @@ static void GAME_EXPORT VGUI_UploadTextureBlock( int id, int drawX, int drawY, c
 
 static void GAME_EXPORT VGUI_BindTexture( int id )
 {
-	if( id <= 0 || id >= vgui.max_textures || !vgui.textures[id].gl_texturenum )
-		id = 1; // NOTE: same as bogus index 2700 in GoldSrc
-
-	ref.dllFuncs.GL_Bind( XASH_TEXTURE0, vgui.textures[id].gl_texturenum );
-	vgui.bound_texture = id;
+	if( id > 0 && id < vgui.max_textures && vgui.textures[id].gl_texturenum )
+	{
+		ref.dllFuncs.GL_Bind( XASH_TEXTURE0, vgui.textures[id].gl_texturenum );
+		vgui.bound_texture = id;
+	}
+	else
+	{
+		// NOTE: same as bogus index 2700 in GoldSrc
+		id = vgui.bound_texture = 1;
+		ref.dllFuncs.GL_Bind( XASH_TEXTURE0, vgui.textures[id].gl_texturenum );
+	}
 }
 
-static void GAME_EXPORT VGUI_GetTextureSizes( int *w, int *h )
+static void GAME_EXPORT VGUI_GetTextureSizes( int *width, int *height )
 {
 	int texnum;
 
@@ -227,56 +235,84 @@ static void GAME_EXPORT VGUI_GetTextureSizes( int *w, int *h )
 	else
 		texnum = R_GetBuiltinTexture( REF_DEFAULT_TEXTURE );
 
-	R_GetTextureParms( w, h, texnum );
+	R_GetTextureParms( width, height, texnum );
+}
+
+static void VGUI_EnableTexture2D( qboolean enable )
+{
+	ref.dllFuncs.GL_TextureTarget( enable ? VGUI_GL_TEXTURE_2D : VGUI_GL_NONE );
+}
+
+static void VGUI_Color4ub( int *pColor )
+{
+	ref.dllFuncs.Color4ub( pColor[0], pColor[1], pColor[2], 255 - pColor[3] );
+	Vector4Set( vgui.color, pColor[0], pColor[1], pColor[2], 255 - pColor[3] );
 }
 
 static void GAME_EXPORT VGUI_SetupDrawingRect( int *pColor )
 {
 	ref.dllFuncs.VGUI_SetupDrawing( true );
-	Vector4Set( vgui.color, pColor[0], pColor[1], pColor[2], 255 - pColor[3] );
+	VGUI_Color4ub( pColor );
 }
 
 static void GAME_EXPORT VGUI_SetupDrawingText( int *pColor )
 {
 	ref.dllFuncs.VGUI_SetupDrawing( false );
-	Vector4Set( vgui.color, pColor[0], pColor[1], pColor[2], 255 - pColor[3] );
+	VGUI_Color4ub( pColor );
+}
+
+static void GAME_EXPORT VGUI_SetupDrawingImage( int *pColor )
+{
+	ref.dllFuncs.VGUI_SetupDrawing( false );
+	VGUI_Color4ub( pColor );
 }
 
 static void GAME_EXPORT VGUI_DrawQuad( const vpoint_t *ul, const vpoint_t *lr )
 {
-	float x, y, w, h;
+	float xscale, yscale;
 
 	if( !ul || !lr )
 		return;
 
-	x = ul->point[0];
-	y = ul->point[1];
-	w = lr->point[0] - x;
-	h = lr->point[1] - y;
-
-	SPR_AdjustSize( &x, &y, &w, &h );
+	xscale = refState.width / (float)clgame.scrInfo.iWidth;
+	yscale = refState.height / (float)clgame.scrInfo.iHeight;
 
 	if( vgui.enable_texture )
 	{
-		float s1, s2, t1, t2;
+		ref.dllFuncs.Begin( TRI_QUADS );
+			ref.dllFuncs.TexCoord2f( ul->coord[0], ul->coord[1] );
+			ref.dllFuncs.Vertex3f( ul->point[0] * xscale, ul->point[1] * yscale, 0.0f );
 
-		s1 = ul->coord[0];
-		t1 = ul->coord[1];
-		s2 = lr->coord[0];
-		t2 = lr->coord[1];
+			ref.dllFuncs.TexCoord2f( lr->coord[0], ul->coord[1] );
+			ref.dllFuncs.Vertex3f( lr->point[0] * xscale, ul->point[1] * yscale, 0.0f );
 
-		ref.dllFuncs.Color4ub( vgui.color[0], vgui.color[1], vgui.color[2], vgui.color[3] );
-		ref.dllFuncs.R_DrawStretchPic( x, y, w, h, s1, t1, s2, t2, vgui.textures[vgui.bound_texture].gl_texturenum );
+			ref.dllFuncs.TexCoord2f( lr->coord[0], lr->coord[1] );
+			ref.dllFuncs.Vertex3f( lr->point[0] * xscale, lr->point[1] * yscale, 0.0f );
+
+			ref.dllFuncs.TexCoord2f( ul->coord[0], lr->coord[1] );
+			ref.dllFuncs.Vertex3f( ul->point[0] * xscale, lr->point[1] * yscale, 0.0f );
+		ref.dllFuncs.End();
 	}
 	else
 	{
-		ref.dllFuncs.FillRGBA( kRenderTransTexture, x, y, w, h, vgui.color[0], vgui.color[1], vgui.color[2], vgui.color[3] );
+		ref.dllFuncs.FillRGBA(
+			kRenderTransTexture,
+			ul->point[0] * xscale,
+			ul->point[1] * yscale,
+			( lr->point[0] - ul->point[0] ) * xscale,
+			( lr->point[1] - ul->point[1] ) * yscale,
+			vgui.color[0],
+			vgui.color[1],
+			vgui.color[2],
+			vgui.color[3]
+		);
 	}
 }
 
 static void GAME_EXPORT VGUI_EnableTexture( qboolean enable )
 {
 	vgui.enable_texture = enable;
+	VGUI_EnableTexture2D( enable );
 }
 
 static void GAME_EXPORT *VGUI_EngineMalloc( size_t size )
@@ -353,7 +389,7 @@ static const vguiapi_t gEngfuncs =
 	.DrawShutdown = VGUI_DrawShutdown,
 	.SetupDrawingText = VGUI_SetupDrawingText,
 	.SetupDrawingRect = VGUI_SetupDrawingRect,
-	.SetupDrawingImage = VGUI_SetupDrawingText, // same as text
+	.SetupDrawingImage = VGUI_SetupDrawingImage,
 	.BindTexture = VGUI_BindTexture,
 	.EnableTexture = VGUI_EnableTexture,
 	.CreateTexture = VGUI_CreateTexture,
@@ -436,9 +472,33 @@ VGui_Startup
 */
 void VGui_Startup( int width, int height )
 {
-	// vgui not initialized from both support and client modules, skip
-	if( !vgui.initialized )
+	static qboolean failed = false;
+	void (*F)( vguiapi_t* );
+
+	if( failed )
 		return;
+
+	if( !vgui.initialized )
+	{
+		vgui.dllFuncs = gEngfuncs;
+
+		if( clgame.hInstance )
+		{
+			F = COM_GetProcAddress( clgame.hInstance, "InitVGUISupportAPI" );
+			if( F )
+			{
+				F( &vgui.dllFuncs );
+				vgui.initialized = vgui.dllFuncs.initialized = true;
+				Con_Reportf( "%s: initialized VGUI support API from client module\n", __func__ );
+			}
+		}
+
+		if( !vgui.initialized && !VGui_LoadProgs( NULL ))
+		{
+			failed = true;
+			return;
+		}
+	}
 
 	height = Q_max( 480, height );
 
@@ -472,6 +532,7 @@ void VGui_Shutdown( void )
 
 	// drop pointers to now unloaded vgui_support
 	vgui.dllFuncs = gEngfuncs;
+	vgui.initialized = false;
 	vgui.hInstance = NULL;
 }
 

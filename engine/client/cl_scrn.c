@@ -903,6 +903,7 @@ void SCR_VidInit( void )
 	// vid_state has changed
 	if( gameui.hInstance ) gameui.dllFuncs.pfnVidInit();
 	if( clgame.hInstance ) clgame.dllFuncs.pfnVidInit();
+	if( clgame.hInstance ) VGui_Startup( refState.width, refState.height );
 	if( clgame.dllFuncs.pfnVGui2_VidInit ) clgame.dllFuncs.pfnVGui2_VidInit();
 
 

@@ -3955,7 +3955,20 @@ static cl_enginefunc_t gEngfuncs =
 	pfnGetAppID,
 	Cmd_AliasGetList,
 	pfnVguiWrap2_GetMouseDelta,
-	pfnFilteredClientCmd
+	pfnFilteredClientCmd,
+
+	Image_AddCmdFlags,
+	Image_SetForceFlags,
+	Image_ClearForceFlags,
+	Image_CustomPalette,
+	Image_Process,
+	Image_NewTemp,
+	FS_LoadImage,
+	FS_SaveImage,
+	FS_CopyImage,
+	FS_FreeImage,
+	Image_GetPFDesc,
+	Image_CalcImageSize
 };
 
 void CL_UnloadProgs( void )
@@ -3972,6 +3985,8 @@ void CL_UnloadProgs( void )
 	// NOTE: HLFX 0.5 has strange bug: hanging on exit if no map was loaded
 	if( clgame.dllFuncs.pfnVGui2_Shutdown )
 		clgame.dllFuncs.pfnVGui2_Shutdown();
+
+	VGui_Shutdown();
 
 	if( Q_stricmp( GI->gamefolder, "hlfx" ) || GI->version != 0.5f )
 		clgame.dllFuncs.pfnShutdown();

@@ -293,11 +293,6 @@ static int pfnGetStudioModelInterface( int version, struct r_studio_interface_s 
 		0;
 }
 
-static const bpc_desc_t *pfnImage_GetPFDesc( int idx )
-{
-	return &PFDesc[idx];
-}
-
 static void pfnDrawNormalTriangles( void )
 {
 	clgame.dllFuncs.pfnDrawNormalTriangles();
@@ -449,8 +444,8 @@ static const ref_api_t gEngfuncs =
 	FS_CopyImage,
 	FS_FreeImage,
 	Image_SetMDLPointer,
-	pfnImage_GetPFDesc,
-	Image_ComputeSize,
+	Image_GetPFDesc,
+	Image_CalcImageSize,
 
 	pfnDrawNormalTriangles,
 	pfnDrawTransparentTriangles,

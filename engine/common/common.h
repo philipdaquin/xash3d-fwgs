@@ -501,6 +501,9 @@ qboolean Image_CustomPalette( void );
 void Image_ClearForceFlags( void );
 void Image_SetMDLPointer( byte *p );
 void Image_CheckPaletteQ1( void );
+const bpc_desc_t *Image_GetPFDesc( int idx );
+size_t Image_ComputeSize( int type, int width, int height, int depth );
+size_t Image_CalcImageSize( int type, int width, int height, int depth );
 
 extern const bpc_desc_t PFDesc[PF_TOTALCOUNT];	// image get pixelformat
 

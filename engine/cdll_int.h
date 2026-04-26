@@ -27,6 +27,7 @@ extern "C" {
 #endif
 
 #include "const.h"
+#include "com_image.h"
 #include <stdint.h>
 
 #define MAX_ALIAS_NAME	32
@@ -306,6 +307,20 @@ typedef struct cl_enginefuncs_s
 
 	// added in 2019 update, not documented yet
 	int		(*pfnFilteredClientCmd)( const char *cmd );
+
+	// Xash3D image helpers
+	void		(*Image_AddCmdFlags)( uint flags );
+	void		(*Image_SetForceFlags)( uint flags );
+	void		(*Image_ClearForceFlags)( void );
+	qboolean	(*Image_CustomPalette)( void );
+	qboolean	(*Image_Process)( rgbdata_t **pix, int width, int height, uint flags, float reserved );
+	rgbdata_t	*(*Image_NewTemp)( void );
+	rgbdata_t	*(*FS_LoadImage)( const char *filename, const byte *buffer, size_t size );
+	qboolean	(*FS_SaveImage)( const char *filename, rgbdata_t *pix );
+	rgbdata_t	*(*FS_CopyImage)( const rgbdata_t *in );
+	void		(*FS_FreeImage)( rgbdata_t *pack );
+	const bpc_desc_t *(*Image_GetPFDesc)( int idx );
+	size_t		(*Image_CalcImageSize)( int type, int width, int height, int depth );
 } cl_enginefunc_t;
 
 #define CLDLL_INTERFACE_VERSION	7
