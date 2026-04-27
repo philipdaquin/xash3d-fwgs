@@ -90,6 +90,12 @@ static void GAME_EXPORT VGUI_DrawShutdown( void )
 
 static int GAME_EXPORT VGUI_GenerateTexture( void )
 {
+	if( !vgui.mempool )
+	{
+		Con_Printf( S_WARN "%s: draw pool was not initialized, initializing now\n", __func__ );
+		VGUI_DrawInit();
+	}
+
 	// allocate new
 	if( vgui.texture_id + 1 >= vgui.max_textures )
 	{

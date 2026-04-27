@@ -52,6 +52,8 @@ static void VGui_Startup( int width, int height )
 		return;
 	}
 
+	g_api->DrawInit();
+
 	rootpanel = new Panel;
 	rootpanel->setSize( width, height );
 	rootpanel->setPaintBorderEnabled( false );
@@ -69,10 +71,6 @@ static void VGui_Startup( int width, int height )
 	//ASSERT( rootpanel->getApp() != NULL );
 	//ASSERT( rootpanel->getSurfaceBase() != NULL );
 
-	g_api->DrawInit ();
-
-
-	
 }
 
 static void VGui_Shutdown( void )
