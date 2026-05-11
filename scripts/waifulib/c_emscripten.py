@@ -37,10 +37,10 @@ def gcc_modifier_emscripten(conf):
 
 	conf.env.CFLAGS_cshlib = ['-fPIC', '-sSIDE_MODULE=1', '-Oz']
 	conf.env.CFLAGS_cstlib = ['-fPIC']
-	conf.env.CFLAGS_cprogram = ['-sMAIN_MODULE=1']
+	conf.env.CFLAGS_cprogram = ['-sMAIN_MODULE=1', '-sUSE_FREETYPE=1']
 
 	conf.env.LINKFLAGS_cshlib = ['-sSIDE_MODULE=1', '-Oz']
-	conf.env.LINKFLAGS_cprogram = ['-sMAIN_MODULE=1']
+	conf.env.LINKFLAGS_cprogram = ['-sMAIN_MODULE=1', '-sUSE_FREETYPE=1']
 
 @conf
 def gxx_modifier_emscripten(conf):
@@ -50,10 +50,10 @@ def gxx_modifier_emscripten(conf):
 	conf.env.cxxprogram_PATTERN = '%s.js'
 	conf.env.CXXFLAGS_cxxshlib = ['-fPIC', '-sSIDE_MODULE=1', '-Oz']
 	conf.env.CXXFLAGS_cxxstlib = ['-fPIC']
-	conf.env.CXXFLAGS_cxxprogram = ['-sMAIN_MODULE=1']
+	conf.env.CXXFLAGS_cxxprogram = ['-sMAIN_MODULE=1', '-sUSE_FREETYPE=1']
 
 	conf.env.LINKFLAGS_cxxshlib = ['-sSIDE_MODULE=1', '-Oz']
-	conf.env.LINKFLAGS_cxxprogram = ['-sMAIN_MODULE=1']
+	conf.env.LINKFLAGS_cxxprogram = ['-sMAIN_MODULE=1', '-sUSE_FREETYPE=1']
 
 @feature('cxxprogram', 'cprogram')
 @after_method('apply_link')

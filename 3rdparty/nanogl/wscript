@@ -22,6 +22,8 @@ def configure(conf):
 
 def build(bld):
 	source = bld.path.ant_glob(['*.cpp'])
+	if bld.env.DEST_OS == 'emscripten':
+		source = [ node for node in source if node.name != 'eglwrap.cpp' ]
 	libs = ['werror']
 	if bld.env.DEST_OS2 == 'android':
 		libs += ['LOG']

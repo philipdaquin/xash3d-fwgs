@@ -264,6 +264,7 @@ def configure(conf):
 		enforce_pic = False
 	elif conf.env.DEST_OS == 'emscripten':
 		conf.options.GL               = False
+		conf.options.NANOGL           = True
 		conf.options.WEBGL2           = True
 
 	# psvita needs -fPIC set manually and static builds are incompatible with -fPIC
