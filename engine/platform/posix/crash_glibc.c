@@ -29,6 +29,13 @@ int Sys_CrashDetailsExecinfo( int logfd, char *message, int len, size_t max_len 
 	void *addrs[16];
 	int size = backtrace( addrs, sizeof( addrs ) / sizeof( addrs[0] ));
 	char **syms = backtrace_symbols( addrs, size );
+	char note[128];
+	int note_len;
+
+	note_len = Q_snprintf( note, sizeof( note ), "Crash: execinfo stack trace follows (%d frame%s)\n", size, size == 1 ? "" : "s" );
+	write( logfd, note, note_len );
+	write( STDERR_FILENO, note, note_len );
+	len += Q_snprintf( message + len, max_len - len, "%s", note );
 
 	for( int i = 0; i < size && syms; i++ )
 	{
@@ -42,6 +49,14 @@ int Sys_CrashDetailsExecinfo( int logfd, char *message, int len, size_t max_len 
 		write( STDERR_FILENO, &ch, 1 );
 
 		len += Q_snprintf( message + len, max_len - len, "%2d: %s\n", i, syms[i] );
+	}
+
+	if( size <= 0 || !syms )
+	{
+		note_len = Q_snprintf( note, sizeof( note ), "Crash: execinfo could not resolve any frames\n" );
+		write( logfd, note, note_len );
+		write( STDERR_FILENO, note, note_len );
+		len += Q_snprintf( message + len, max_len - len, "%s", note );
 	}
 
 	return len;

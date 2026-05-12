@@ -133,10 +133,11 @@ static int Sys_BacktracePrintFull( void *data, uintptr_t pc, const char *filenam
 
 int Sys_CrashDetailsLibbacktrace( int logfd, char *message, int len, size_t max_len )
 {
+	size_t message_size = len < (int)max_len ? max_len - len : 0;
 	struct print_data pd =
 	{
 		.message = message + len,
-		.message_size = sizeof( message ) - len,
+		.message_size = message_size,
 		.logfd = logfd,
 		.len = len,
 	};

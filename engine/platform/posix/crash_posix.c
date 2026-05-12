@@ -31,6 +31,21 @@ GNU General Public License for more details.
 
 static qboolean have_libbacktrace = false;
 
+static const char *Sys_SignalName( int signal )
+{
+	switch( signal )
+	{
+	case SIGSEGV: return "SIGSEGV";
+	case SIGABRT: return "SIGABRT";
+	case SIGBUS:  return "SIGBUS";
+	case SIGILL:  return "SIGILL";
+#ifdef SIGFPE
+	case SIGFPE:  return "SIGFPE";
+#endif
+	default:      return "UNKNOWN";
+	}
+}
+
 static void Sys_Crash( int signal, siginfo_t *si, void *context )
 {
 	char message[8192];
@@ -42,10 +57,11 @@ static void Sys_Crash( int signal, siginfo_t *si, void *context )
 		Q_buildnum(), g_buildcommit, g_buildbranch, Q_buildos(), Q_buildarch() );
 
 #if !XASH_FREEBSD && !XASH_NETBSD && !XASH_OPENBSD && !XASH_APPLE
-	len += Q_snprintf( message + len, sizeof( message ) - len, "Crash: signal %d errno %d with code %d at %p %p\n", signal, si->si_errno, si->si_code, si->si_addr, si->si_ptr );
+	len += Q_snprintf( message + len, sizeof( message ) - len, "Crash: signal %d (%s) errno %d with code %d at %p %p\n", signal, Sys_SignalName( signal ), si->si_errno, si->si_code, si->si_addr, si->si_ptr );
 #else
-	len += Q_snprintf( message + len, sizeof( message ) - len, "Crash: signal %d errno %d with code %d at %p\n", signal, si->si_errno, si->si_code, si->si_addr );
+	len += Q_snprintf( message + len, sizeof( message ) - len, "Crash: signal %d (%s) errno %d with code %d at %p\n", signal, Sys_SignalName( signal ), si->si_errno, si->si_code, si->si_addr );
 #endif
+	len += Q_snprintf( message + len, sizeof( message ) - len, "Crash: handler entered, context=%p\n", context );
 
 	write( STDERR_FILENO, message, len );
 
@@ -56,6 +72,7 @@ static void Sys_Crash( int signal, siginfo_t *si, void *context )
 #if HAVE_LIBBACKTRACE
 	if( have_libbacktrace && !detailed_message )
 	{
+		len += Q_snprintf( message + len, sizeof( message ) - len, "Crash: collecting stack trace via libbacktrace\n" );
 		len = Sys_CrashDetailsLibbacktrace( logfd, message, len, sizeof( message ));
 		detailed_message = true;
 	}
@@ -64,6 +81,7 @@ static void Sys_Crash( int signal, siginfo_t *si, void *context )
 #if HAVE_EXECINFO
 	if( !detailed_message )
 	{
+		len += Q_snprintf( message + len, sizeof( message ) - len, "Crash: collecting stack trace via execinfo\n" );
 		len = Sys_CrashDetailsExecinfo( logfd, message, len, sizeof( message ));
 		detailed_message = true;
 	}
