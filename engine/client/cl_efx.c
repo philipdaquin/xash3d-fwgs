@@ -29,11 +29,22 @@ static particle_t	*cl_active_particles;
 static particle_t	*cl_active_tracers;
 static particle_t	*cl_free_particles;
 static particle_t	*cl_particles = NULL;	// particle pool
+static int		cl_particles_count;
+static int		cl_viewbeams_count;
 static vec3_t	cl_avelocities[NUMVERTEXNORMALS];
 static float	cl_lasttimewarn = 0.0f;
 
 // expand debugging BBOX particle hulls by this many units.
 #define BOX_GAP	0.0f
+
+static int CL_ValidatePoolSize( const char *label, int value, int fallback )
+{
+	if( value > 0 )
+		return value;
+
+	Con_Printf( S_WARN "%s: invalid %s=%d, using fallback %d\n", __func__, label, value, fallback );
+	return fallback;
+}
 
 /*
 ================
@@ -92,7 +103,11 @@ void CL_InitParticles( void )
 {
 	int	i;
 
-	cl_particles = Mem_Calloc( cls.mempool, sizeof( particle_t ) * GI->max_particles );
+	cl_particles_count = CL_ValidatePoolSize( "max_particles", GI ? GI->max_particles : 0, 4096 );
+	cl_particles = Mem_Calloc( cls.mempool, sizeof( particle_t ) * cl_particles_count );
+	if( !cl_particles )
+		Host_Error( "%s: couldn't allocate %d particle slots\n", __func__, cl_particles_count );
+
 	CL_ClearParticles ();
 
 	// this is used for EF_BRIGHTFIELD
@@ -124,10 +139,10 @@ void CL_ClearParticles( void )
 	cl_active_particles = NULL;
 	cl_active_tracers = NULL;
 
-	for( i = 0; i < GI->max_particles - 1; i++ )
+	for( i = 0; i < cl_particles_count - 1; i++ )
 		cl_particles[i].next = &cl_particles[i+1];
 
-	cl_particles[GI->max_particles-1].next = NULL;
+	cl_particles[cl_particles_count - 1].next = NULL;
 }
 
 /*
@@ -345,7 +360,11 @@ CL_InitViewBeams
 */
 void CL_InitViewBeams( void )
 {
-	cl_viewbeams = Mem_Calloc( cls.mempool, sizeof( BEAM ) * GI->max_beams );
+	cl_viewbeams_count = CL_ValidatePoolSize( "max_beams", GI ? GI->max_beams : 0, 128 );
+	cl_viewbeams = Mem_Calloc( cls.mempool, sizeof( BEAM ) * cl_viewbeams_count );
+	if( !cl_viewbeams )
+		Host_Error( "%s: couldn't allocate %d beam slots\n", __func__, cl_viewbeams_count );
+
 	CL_ClearViewBeams();
 }
 
@@ -365,9 +384,9 @@ void CL_ClearViewBeams( void )
 	cl_free_beams = cl_viewbeams;
 	cl_active_beams = NULL;
 
-	for( i = 0; i < GI->max_beams - 1; i++ )
+	for( i = 0; i < cl_viewbeams_count - 1; i++ )
 		cl_viewbeams[i].next = &cl_viewbeams[i+1];
-	cl_viewbeams[GI->max_beams - 1].next = NULL;
+	cl_viewbeams[cl_viewbeams_count - 1].next = NULL;
 }
 
 /*

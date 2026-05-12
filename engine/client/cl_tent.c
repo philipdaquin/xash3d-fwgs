@@ -38,6 +38,7 @@ TEMPENTS MANAGEMENT
 static TEMPENTITY *cl_active_tents;
 static TEMPENTITY *cl_free_tents;
 static TEMPENTITY *cl_tempents = NULL;		// entities pool
+static int cl_tempents_count;
 
 static model_t *cl_sprite_muzzleflash[MAX_MUZZLEFLASH];	// muzzle flashes
 static model_t *cl_sprite_ricochet = NULL;
@@ -181,13 +182,13 @@ static void CL_ClearTempEnts( void )
 
 	if( !cl_tempents ) return;
 
-	for( i = 0; i < GI->max_tents - 1; i++ )
+	for( i = 0; i < cl_tempents_count - 1; i++ )
 	{
 		cl_tempents[i].next = &cl_tempents[i+1];
 		cl_tempents[i].entity.trivial_accept = INVALID_HANDLE;
 	}
 
-	cl_tempents[GI->max_tents-1].next = NULL;
+	cl_tempents[cl_tempents_count - 1].next = NULL;
 	cl_free_tents = cl_tempents;
 	cl_active_tents = NULL;
 }
@@ -200,7 +201,14 @@ CL_InitTempents
 */
 void CL_InitTempEnts( void )
 {
-	cl_tempents = Mem_Calloc( cls.mempool, sizeof( TEMPENTITY ) * GI->max_tents );
+	cl_tempents_count = GI && GI->max_tents > 0 ? GI->max_tents : 500;
+	if( !GI || GI->max_tents <= 0 )
+		Con_Printf( S_WARN "%s: invalid max_tents=%d, using fallback %d\n", __func__, GI ? GI->max_tents : 0, cl_tempents_count );
+
+	cl_tempents = Mem_Calloc( cls.mempool, sizeof( TEMPENTITY ) * cl_tempents_count );
+	if( !cl_tempents )
+		Host_Error( "%s: couldn't allocate %d temp entity slots\n", __func__, cl_tempents_count );
+
 	CL_ClearTempEnts();
 
 	// load tempent sprites (glowshell, muzzleflashes etc)
