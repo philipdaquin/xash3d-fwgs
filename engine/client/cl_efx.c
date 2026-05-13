@@ -104,10 +104,13 @@ void CL_InitParticles( void )
 	int	i;
 
 	cl_particles_count = CL_ValidatePoolSize( "max_particles", GI ? GI->max_particles : 0, 4096 );
+	Con_Printf( S_NOTE "%s: allocating particle pool count=%zu\n", __func__, cl_particles_count );
 	cl_particles = Mem_Calloc( cls.mempool, sizeof( particle_t ) * cl_particles_count );
 	if( !cl_particles )
-		Host_Error( "%s: couldn't allocate %d particle slots\n", __func__, cl_particles_count );
+		Host_Error( "%s: couldn't allocate %zu particle slots\n", __func__, cl_particles_count );
 
+	Con_Printf( S_NOTE "%s: particle pool ptr=%p size=%zu\n", __func__, (void *)cl_particles, sizeof( particle_t ) * cl_particles_count );
+	Con_Printf( S_NOTE "%s: linking particle free list\n", __func__ );
 	CL_ClearParticles ();
 
 	// this is used for EF_BRIGHTFIELD
@@ -143,6 +146,7 @@ void CL_ClearParticles( void )
 		cl_particles[i].next = &cl_particles[i+1];
 
 	cl_particles[cl_particles_count - 1].next = NULL;
+	Con_Printf( S_NOTE "%s: particle free list linked (%zu entries)\n", __func__, cl_particles_count );
 }
 
 /*
@@ -361,10 +365,12 @@ CL_InitViewBeams
 void CL_InitViewBeams( void )
 {
 	cl_viewbeams_count = CL_ValidatePoolSize( "max_beams", GI ? GI->max_beams : 0, 128 );
+	Con_Printf( S_NOTE "%s: allocating beam pool count=%zu\n", __func__, cl_viewbeams_count );
 	cl_viewbeams = Mem_Calloc( cls.mempool, sizeof( BEAM ) * cl_viewbeams_count );
 	if( !cl_viewbeams )
-		Host_Error( "%s: couldn't allocate %d beam slots\n", __func__, cl_viewbeams_count );
+		Host_Error( "%s: couldn't allocate %zu beam slots\n", __func__, cl_viewbeams_count );
 
+	Con_Printf( S_NOTE "%s: beam pool ptr=%p size=%zu\n", __func__, (void *)cl_viewbeams, sizeof( BEAM ) * cl_viewbeams_count );
 	CL_ClearViewBeams();
 }
 
@@ -387,6 +393,7 @@ void CL_ClearViewBeams( void )
 	for( i = 0; i < cl_viewbeams_count - 1; i++ )
 		cl_viewbeams[i].next = &cl_viewbeams[i+1];
 	cl_viewbeams[cl_viewbeams_count - 1].next = NULL;
+	Con_Printf( S_NOTE "%s: beam free list linked (%zu entries)\n", __func__, cl_viewbeams_count );
 }
 
 /*

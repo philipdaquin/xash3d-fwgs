@@ -195,7 +195,32 @@ void CL_WriteMessageHistory( void )
 	}
 
 	old = &cls_message_debug.oldcmd[thecmd];
+	{
+		int prevcmd = ( thecmd - 1 ) & MSG_MASK;
+		oldcmd_t *prev = &cls_message_debug.oldcmd[prevcmd];
+		int start = Q_max( prev->starting_offset - 8, 0 );
+		int end = Q_min( prev->starting_offset + 64, (int)MSG_GetMaxBytes( msg ));
+		int j;
+
+		Con_Printf( S_NOTE "LAST GOOD: " S_DEFAULT "%i %04i %s\n",
+			prev->frame_number, prev->starting_offset, CL_MsgInfo( prev->command ));
+		Con_Printf( S_NOTE "AROUND LAST GOOD: offset=%04i len=%i\n", prev->starting_offset, end - start );
+		for( j = start; j < end; j++ )
+			Con_Printf( "%02x%c", MSG_GetData( msg )[j], ((j - start) & 15) == 15 || j + 1 == end ? '\n' : ' ' );
+	}
+
 	Con_Printf( S_RED "BAD: " S_DEFAULT "%i %04i %s\n", old->frame_number, old->starting_offset, CL_MsgInfo( old->command ));
+
+	{
+		int start = old->starting_offset;
+		int end = Q_min( start + 32, (int)MSG_GetMaxBytes( msg ));
+		int j;
+
+		Con_Printf( S_NOTE "BAD BYTES: offset=%04i len=%i\n", start, end - start );
+		for( j = start; j < end; j++ )
+			Con_Printf( "%02x%c", MSG_GetData( msg )[j], ((j - start) & 15) == 15 || j + 1 == end ? '\n' : ' ' );
+	}
+
 	CL_WriteErrorMessage( old->starting_offset, msg );
 	cls_message_debug.parsing = false;
 }
