@@ -22,4 +22,6 @@ qboolean Sys_SetupLibbacktrace( const char *argv0 );
 //
 // crash_glibc.c
 //
+void Sys_PrintLoadedLibraries( int logfd );
+void Sys_PrintStackTrace( int logfd );
 int Sys_CrashDetailsExecinfo( int logfd, char *message, int len, size_t max_len );

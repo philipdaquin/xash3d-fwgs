@@ -5,6 +5,7 @@
 from waflib import Logs, TaskGen
 from waflib.extras import pthread
 import os
+import shlex
 from copy import copy
 
 top = '.'
@@ -331,10 +332,16 @@ def build(bld):
 			linkflags = [ '-sENVIRONMENT=web', '-sAUTO_JS_LIBRARIES=0',
 						  '-lidbfs.js', '-lwebgl.js', '-lopenal.js', '-lasync.js', '-sNO_POLYFILL',
 						  '--js-library=../engine/platform/emscripten/net_emscripten.js',
-						  '-sINITIAL_MEMORY=256mb', '-sSTACK_SIZE=16mb', '-Oz', '--closure 1', '--minify-wasm-imports',
+						  '-sINITIAL_MEMORY=512mb', '-sALLOW_MEMORY_GROWTH=1', '-sSTACK_SIZE=16mb', '-Oz', '--closure 1', '--minify-wasm-imports',
 						  '-sMAX_WEBGL_VERSION=2', '-sMIN_WEBGL_VERSION=2', '-sFULL_ES2', # works ok with gl2shim
 						  '-sEXPORTED_RUNTIME_METHODS=callMain,addRunDependency,removeRunDependency,FS,ccall',
 						  '-sMODULARIZE', '-sEXPORT_NAME=Xash3D']
+			linkflags += shlex.split( os.environ.get( 'EMCC_LDFLAGS_EXTRA', '' ) )
+			linkflags += shlex.split( os.environ.get( 'EMCC_CFLAGS_EXTRA', '' ) )
+		elif bld.env.DEST_OS in ['linux', 'android', 'freebsd', 'netbsd', 'openbsd', 'dragonfly']:
+			linkflags = [ '-rdynamic' ]
+			bld.env.append_unique('CFLAGS', ['-g3', '-fno-omit-frame-pointer'])
+			bld.env.append_unique('CXXFLAGS', ['-g3', '-fno-omit-frame-pointer'])
 
 		f(source = source,
 			target = 'xash',

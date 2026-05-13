@@ -19,10 +19,67 @@ GNU General Public License for more details.
 // platform-specific code
 #if HAVE_EXECINFO
 #include <execinfo.h>
+#include <link.h>
 #include <signal.h>
 #include "common.h"
 #include "input.h"
 #include "crash.h"
+
+static int Sys_PrintLibraryInfo( struct dl_phdr_info *info, size_t size, void *data )
+{
+	int logfd = *(int *)data;
+	char line[512];
+	const char *name = info->dlpi_name && info->dlpi_name[0] ? info->dlpi_name : "<main>";
+	int len = Q_snprintf( line, sizeof( line ), "LIB: %s @ %p\n", name, (void *)info->dlpi_addr );
+
+	(void)size;
+
+	if( len > 0 )
+	{
+		write( logfd, line, len );
+		write( STDERR_FILENO, line, len );
+	}
+
+	return 0;
+}
+
+void Sys_PrintLoadedLibraries( int logfd )
+{
+	const char header[] = "\n=== LOADED LIBRARIES ===\n";
+
+	write( logfd, header, sizeof( header ) - 1 );
+	write( STDERR_FILENO, header, sizeof( header ) - 1 );
+
+	dl_iterate_phdr( Sys_PrintLibraryInfo, &logfd );
+}
+
+void Sys_PrintStackTrace( int logfd )
+{
+	enum { MAX_FRAMES = 128 };
+	void *frames[MAX_FRAMES];
+	int count = backtrace( frames, ARRAYSIZE( frames ));
+	const char header[] = "\n=== C++ STACK TRACE ===\n";
+	const char footer[] = "=== END STACK TRACE ===\n";
+
+	write( logfd, header, sizeof( header ) - 1 );
+	write( STDERR_FILENO, header, sizeof( header ) - 1 );
+
+	if( count > 0 )
+	{
+		backtrace_symbols_fd( frames, count, logfd );
+		if( logfd != STDERR_FILENO )
+			backtrace_symbols_fd( frames, count, STDERR_FILENO );
+	}
+	else
+	{
+		const char note[] = "Crash: backtrace() returned no frames\n";
+		write( logfd, note, sizeof( note ) - 1 );
+		write( STDERR_FILENO, note, sizeof( note ) - 1 );
+	}
+
+	write( logfd, footer, sizeof( footer ) - 1 );
+	write( STDERR_FILENO, footer, sizeof( footer ) - 1 );
+}
 
 int Sys_CrashDetailsExecinfo( int logfd, char *message, int len, size_t max_len )
 {

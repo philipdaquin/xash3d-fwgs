@@ -1199,6 +1199,34 @@ static void Host_MainLoop( void *userdata )
 	COM_Frame( newtime - *poldtime );
 	*poldtime = newtime;
 }
+
+static void Host_SetupEmscriptenDiagnostics( void )
+{
+	EM_ASM(
+	{
+		if( Module._xashDiagHooksInstalled )
+			return;
+
+		Module._xashDiagHooksInstalled = true;
+		Module.printErr = function( text )
+		{
+			console.error( text );
+		};
+		Module.onAbort = function( reason )
+		{
+			console.error( "Xash abort:", reason );
+
+			try
+			{
+				console.error( new Error().stack );
+			}
+			catch( err )
+			{
+				console.error( "Xash abort: stack trace unavailable", err );
+			}
+		};
+	});
+}
 #endif
 
 /*
@@ -1371,6 +1399,7 @@ int EXPORT Host_Main( int argc, char **argv, const char *progname, int bChangeGa
 		oldtime = newtime;
 	}
 #else // XASH_EMSCRIPTEN
+Host_SetupEmscriptenDiagnostics();
 EM_ASM( { Module.callbacks?.gameReady?.() } );
 emscripten_set_main_loop_arg( Host_MainLoop, &oldtime, 0, false );
 #endif // XASH_EMSCRIPTEN

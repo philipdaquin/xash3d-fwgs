@@ -46,11 +46,38 @@ static const char *Sys_SignalName( int signal )
 	}
 }
 
+static int Sys_CrashContextInfo( void *context, void **ip, void **sp, void **bp )
+{
+#if defined(__i386__) || defined(XASH_I386)
+	ucontext_t *uc = (ucontext_t *)context;
+	*ip = (void *)(uintptr_t)uc->uc_mcontext.gregs[REG_EIP];
+	*sp = (void *)(uintptr_t)uc->uc_mcontext.gregs[REG_ESP];
+	*bp = (void *)(uintptr_t)uc->uc_mcontext.gregs[REG_EBP];
+	return 1;
+#elif defined(__x86_64__) || defined(XASH_X86_64)
+	ucontext_t *uc = (ucontext_t *)context;
+	*ip = (void *)(uintptr_t)uc->uc_mcontext.gregs[REG_RIP];
+	*sp = (void *)(uintptr_t)uc->uc_mcontext.gregs[REG_RSP];
+	*bp = (void *)(uintptr_t)uc->uc_mcontext.gregs[REG_RBP];
+	return 1;
+#else
+	(void)context;
+	*ip = NULL;
+	*sp = NULL;
+	*bp = NULL;
+	return 0;
+#endif
+}
+
 static void Sys_Crash( int signal, siginfo_t *si, void *context )
 {
 	char message[8192];
+	void *ip = NULL, *sp = NULL, *bp = NULL;
 	int len, logfd, i = 0;
 	qboolean detailed_message = false;
+
+	// last-resort breadcrumb: always try to tell stderr that we entered the crash handler
+	write( STDERR_FILENO, "Crash: entered fatal signal handler\n", 36 );
 
 	// safe actions first, stack and memory may be corrupted
 	len = Q_snprintf( message, sizeof( message ), "Ver: " XASH_ENGINE_NAME " " XASH_VERSION " (build %i-%s-%s, %s-%s)\n",
@@ -62,12 +89,25 @@ static void Sys_Crash( int signal, siginfo_t *si, void *context )
 	len += Q_snprintf( message + len, sizeof( message ) - len, "Crash: signal %d (%s) errno %d with code %d at %p\n", signal, Sys_SignalName( signal ), si->si_errno, si->si_code, si->si_addr );
 #endif
 	len += Q_snprintf( message + len, sizeof( message ) - len, "Crash: handler entered, context=%p\n", context );
+	if( Sys_CrashContextInfo( context, &ip, &sp, &bp ))
+		len += Q_snprintf( message + len, sizeof( message ) - len, "Crash: ip=%p sp=%p bp=%p\n", ip, sp, bp );
 
 	write( STDERR_FILENO, message, len );
 
 	// now get log fd and write trace directly to log
 	logfd = Sys_LogFileNo();
 	write( logfd, message, len );
+
+#if HAVE_EXECINFO
+	{
+		const char note[] = "Crash: printing native C++ stack trace\n";
+		write( STDERR_FILENO, note, sizeof( note ) - 1 );
+		write( logfd, note, sizeof( note ) - 1 );
+		len += Q_snprintf( message + len, sizeof( message ) - len, "%s", note );
+	}
+	Sys_PrintLoadedLibraries( logfd );
+	Sys_PrintStackTrace( logfd );
+#endif
 
 #if HAVE_LIBBACKTRACE
 	if( have_libbacktrace && !detailed_message )
