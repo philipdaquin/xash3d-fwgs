@@ -65,7 +65,8 @@ void CMenuBackgroundBitmap::VidInit()
 
 void CMenuBackgroundBitmap::DrawInGameBackground()
 {
-	UI_FillRect( m_scPos, m_scSize, uiColorBlack );
+	// Keep the menu readable, but avoid replacing the background with a solid black fill.
+	UI_FillRect( m_scPos, m_scSize, 0x66000000 );
 }
 
 void CMenuBackgroundBitmap::DrawColor()
@@ -104,6 +105,8 @@ CMenuBackgroundBitmap::Draw
 */
 void CMenuBackgroundBitmap::Draw()
 {
+	bool dimInGame = false;
+
 	if( bForceColor )
 	{
 		DrawColor();
@@ -117,16 +120,14 @@ void CMenuBackgroundBitmap::Draw()
 			return;
 		}
 
-		if( EngFuncs::GetCvarFloat( "ui_renderworld" ) )
-		{
-			DrawInGameBackground();
-			return;
-		}
+		dimInGame = EngFuncs::GetCvarFloat( "ui_renderworld" ) != 0.0f;
 	}
 
 	if( szPic )
 	{
 		UI_DrawPic( m_scPos, m_scSize, uiColorWhite, szPic );
+		if( dimInGame )
+			DrawInGameBackground();
 		return;
 	}
 
@@ -146,6 +147,8 @@ void CMenuBackgroundBitmap::Draw()
 	if( s_state == DRAW_COLOR )
 	{
 		DrawColor();
+		if( dimInGame )
+			DrawInGameBackground();
 		return;
 	}
 	else if( s_state == DRAW_WON )
@@ -198,6 +201,9 @@ void CMenuBackgroundBitmap::Draw()
 		DrawBackgroundPiece( s_WONBackground, p, xOffset, yOffset, xScale, yScale );
 	else
 		DrawSteamBackgroundLayout( p, xOffset, yOffset, xScale, yScale );
+
+	if( dimInGame )
+		DrawInGameBackground();
 }
 
 bool CMenuBackgroundBitmap::LoadSteamBackground( bool gamedirOnly )
