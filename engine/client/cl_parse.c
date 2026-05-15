@@ -1972,7 +1972,7 @@ void CL_ParseVoiceInit( sizebuf_t *msg )
 	char *pszCodec = MSG_ReadString( msg );
 	int quality = MSG_ReadByte( msg );
 
-	Voice_Init( pszCodec, quality, false ); // init requested codec and the device
+	Voice_Init( pszCodec, quality, false ); // init requested codec
 }
 
 /*

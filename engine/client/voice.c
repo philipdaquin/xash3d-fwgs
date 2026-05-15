@@ -864,7 +864,13 @@ void Voice_RecordStart( void )
 	Voice_RecordStop();
 
 	if( !voice.initialized )
-		return;
+	{
+		const char *codec = voice.codec[0] ? voice.codec : VOICE_DEFAULT_CODEC;
+		int quality = voice.quality ? voice.quality : 3;
+
+		if( !Voice_Init( codec, quality, false ))
+			return;
+	}
 
 	if( voice_inputfromfile.value )
 	{
@@ -883,6 +889,13 @@ void Voice_RecordStart( void )
 			FS_FreeSound( voice.input_file );
 			voice.input_file = NULL;
 		}
+	}
+
+	if( !voice_inputfromfile.value && !voice.device_opened )
+	{
+		voice.device_opened = VoiceCapture_Init();
+		if( !voice.device_opened )
+			return;
 	}
 
 	if( !Voice_IsRecording( ) && voice.device_opened )
@@ -1179,12 +1192,6 @@ qboolean Voice_Init( const char *pszCodecName, int quality, qboolean preinit )
 		Voice_Shutdown();
 		return false;
 	}
-	Con_Printf( "Calling VoiceCapture INIT \n" );
-
-	voice.device_opened = VoiceCapture_Init();
-
-	if( !voice.device_opened )
-		Con_Printf( S_WARN "No microphone is available.\n" );
 
 	voice.initialized = true;
 	return true;

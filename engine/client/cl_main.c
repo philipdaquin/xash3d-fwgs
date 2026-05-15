@@ -3655,6 +3655,7 @@ void CL_Init( void )
 
 
 	S_Init();	// init sound
+	// temporarily disbaled until we fixed th emicrophone issues 
 	Voice_Init( VOICE_DEFAULT_CODEC, 3, true ); // init voice (do not open the device)
 
 

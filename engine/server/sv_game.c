@@ -73,6 +73,53 @@ static edict_t *SV_PEntityOfEntIndex( const int iEntIndex, const qboolean allent
 	return NULL;
 }
 
+static void SV_LogMessageState( const char *tag, int msg_dest, int msg_num, const float *pOrigin, edict_t *ed )
+{
+	const char *current_name = svgame.msg_name ? svgame.msg_name : "Unknown";
+	const char *current_ent = ( svgame.msg_ent != NULL ) ? SV_ClassName( svgame.msg_ent ) : "<null>";
+	const char *next_ent = ( ed != NULL ) ? SV_ClassName( ed ) : "<null>";
+
+	if( pOrigin )
+	{
+		Con_Printf( S_ERROR "%s: open='%s' index=%d dest=%d size_idx=%d real=%d rewrite=%d rpos=%d ent=%s(%d) org=(%.1f %.1f %.1f) | next msg=%d dest=%d ent=%s(%d) org=(%.1f %.1f %.1f)\n",
+			tag,
+			current_name,
+			svgame.msg_index,
+			svgame.msg_dest,
+			svgame.msg_size_index,
+			svgame.msg_realsize,
+			svgame.msg_rewrite_index,
+			svgame.msg_rewrite_pos,
+			current_ent,
+			svgame.msg_ent ? NUM_FOR_EDICT( svgame.msg_ent ) : -1,
+			svgame.msg_org[0], svgame.msg_org[1], svgame.msg_org[2],
+			msg_num,
+			msg_dest,
+			next_ent,
+			ed ? NUM_FOR_EDICT( ed ) : -1,
+			pOrigin[0], pOrigin[1], pOrigin[2] );
+	}
+	else
+	{
+		Con_Printf( S_ERROR "%s: open='%s' index=%d dest=%d size_idx=%d real=%d rewrite=%d rpos=%d ent=%s(%d) org=(%.1f %.1f %.1f) | next msg=%d dest=%d ent=%s(%d) org=<null>\n",
+			tag,
+			current_name,
+			svgame.msg_index,
+			svgame.msg_dest,
+			svgame.msg_size_index,
+			svgame.msg_realsize,
+			svgame.msg_rewrite_index,
+			svgame.msg_rewrite_pos,
+			current_ent,
+			svgame.msg_ent ? NUM_FOR_EDICT( svgame.msg_ent ) : -1,
+			svgame.msg_org[0], svgame.msg_org[1], svgame.msg_org[2],
+			msg_num,
+			msg_dest,
+			next_ent,
+			ed ? NUM_FOR_EDICT( ed ) : -1 );
+	}
+}
+
 
 /*
 =============
@@ -2544,7 +2591,10 @@ static void GAME_EXPORT pfnMessageBegin( int msg_dest, int msg_num, const float 
 	int	i, iSize;
 
 	if( svgame.msg_started )
+	{
+		SV_LogMessageState( __func__, msg_dest, msg_num, pOrigin, ed );
 		Host_Error( "%s: New message started when msg '%s' has not been sent yet\n", __func__, svgame.msg_name );
+	}
 	svgame.msg_started = true;
 
 	// check range
@@ -2632,7 +2682,21 @@ static void GAME_EXPORT pfnMessageEnd( void )
 	word realsize;
 
 	if( svgame.msg_name ) name = svgame.msg_name;
-	if( !svgame.msg_started ) Host_Error( "%s: called with no active message\n", __func__ );
+	if( !svgame.msg_started )
+	{
+		Con_Printf( S_ERROR "%s: called with no active message (open='%s' index=%d dest=%d size_idx=%d real=%d rewrite=%d rpos=%d ent=%s(%d))\n",
+			__func__,
+			name,
+			svgame.msg_index,
+			svgame.msg_dest,
+			svgame.msg_size_index,
+			svgame.msg_realsize,
+			svgame.msg_rewrite_index,
+			svgame.msg_rewrite_pos,
+			( svgame.msg_ent != NULL ) ? SV_ClassName( svgame.msg_ent ) : "<null>",
+			svgame.msg_ent ? NUM_FOR_EDICT( svgame.msg_ent ) : -1 );
+		Host_Error( "%s: called with no active message\n", __func__ );
+	}
 	svgame.msg_started = false;
 
 	if( MSG_CheckOverflow( &sv.multicast ))
