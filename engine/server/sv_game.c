@@ -35,22 +35,83 @@ static byte clientpvs[(MAX_MAP_LEAFS+7)/8];	// for find client in PVS
 typedef void (__cdecl *LINK_ENTITY_FUNC)( entvars_t *pev );
 typedef void (__stdcall *GIVEFNPTRSTODLL)( enginefuncs_t* engfuncs, globalvars_t *pGlobals );
 
-#ifndef NDEBUG
+static int SV_EdictPointerIndex( const edict_t *e )
+{
+	uintptr_t	ptr, base;
+
+	if( !e || !svgame.edicts || !GI )
+		return -1;
+
+	ptr = (uintptr_t)e;
+	base = (uintptr_t)svgame.edicts;
+
+	if( ptr >= base )
+		return (int)(( ptr - base ) / sizeof( edict_t ));
+
+	return -(int)((( base - ptr ) + sizeof( edict_t ) - 1 ) / sizeof( edict_t ));
+}
+
+static qboolean SV_EdictPointerInRange( const edict_t *e )
+{
+	uintptr_t	ptr, base, end;
+
+	if( !e || !svgame.edicts || !GI )
+		return false;
+
+	ptr = (uintptr_t)e;
+	base = (uintptr_t)svgame.edicts;
+	end = base + (uintptr_t)GI->max_edicts * sizeof( edict_t );
+
+	return ptr >= base && ptr < end && (( ptr - base ) % sizeof( edict_t )) == 0;
+}
+
+static void SV_LogBadEdictPointer( const char *func, const edict_t *e, int number, const char *file, int line, const char *action )
+{
+	static double next_bad_edict_warn_time;
+	static int suppressed_bad_edict_warnings;
+
+	if( host.realtime < next_bad_edict_warn_time )
+	{
+		suppressed_bad_edict_warnings++;
+		return;
+	}
+
+	if( sv.current_client )
+	{
+		const char *client_name = sv.current_client->name[0] ? sv.current_client->name : "<unnamed>";
+
+		Con_Printf( S_ERROR "%s: bad entity pointer %p computed=%d max=%d map=%s sv.time=%.3f realtime=%.3f caller=%s:%d client=%s addr=%s suppressed=%d; %s\n",
+			func, (void *)e, number, GI ? GI->max_edicts : -1, sv.name, sv.time, host.realtime,
+			file ? file : "<unknown>", line, client_name, NET_AdrToString( sv.current_client->netchan.remote_address ),
+			suppressed_bad_edict_warnings, action );
+	}
+	else
+	{
+		Con_Printf( S_ERROR "%s: bad entity pointer %p computed=%d max=%d map=%s sv.time=%.3f realtime=%.3f caller=%s:%d client=<none> addr=<none> suppressed=%d; %s\n",
+			func, (void *)e, number, GI ? GI->max_edicts : -1, sv.name, sv.time, host.realtime,
+			file ? file : "<unknown>", line, suppressed_bad_edict_warnings, action );
+	}
+
+	next_bad_edict_warn_time = host.realtime + 5.0;
+	suppressed_bad_edict_warnings = 0;
+}
+
 qboolean SV_CheckEdict( const edict_t *e, const char *file, const int line )
 {
 	int	n;
 
 	if( !e ) return false; // may be NULL
 
-	n = ((int)((edict_t *)(e) - svgame.edicts));
+	n = SV_EdictPointerIndex( e );
 
-	if(( n >= 0 ) && ( n < GI->max_edicts ))
-		return !e->free;
-	Con_Printf( "bad entity %i (called at %s:%i)\n", n, file, line );
+	if( !SV_EdictPointerInRange( e ) || n < 0 || n >= GI->max_edicts )
+	{
+		SV_LogBadEdictPointer( __func__, e, n, file, line, "rejecting edict" );
+		return false;
+	}
 
-	return false;
+	return !e->free;
 }
-#endif
 
 static edict_t *SV_PEntityOfEntIndex( const int iEntIndex, const qboolean allentities )
 {
@@ -3424,7 +3485,7 @@ pfnGetVarsOfEnt
 */
 static entvars_t *GAME_EXPORT pfnGetVarsOfEnt( edict_t *pEdict )
 {
-	if( pEdict )
+	if( SV_IsValidEdict( pEdict ))
 		return &pEdict->v;
 	return NULL;
 }
@@ -3437,7 +3498,11 @@ pfnPEntityOfEntOffset
 */
 static edict_t *GAME_EXPORT pfnPEntityOfEntOffset( int iEntOffset )
 {
-	return (edict_t *)((byte *)svgame.edicts + iEntOffset);
+	if( iEntOffset >= 0 && iEntOffset < GI->max_edicts * (int)sizeof( edict_t ) && !( iEntOffset % (int)sizeof( edict_t )))
+		return (edict_t *)((byte *)svgame.edicts + iEntOffset);
+
+	Con_Printf( S_ERROR "%s: bad entity offset %d max=%d; returning NULL\n", __func__, iEntOffset, GI->max_edicts );
+	return NULL;
 }
 
 /*
@@ -3448,6 +3513,12 @@ pfnEntOffsetOfPEntity
 */
 static int GAME_EXPORT pfnEntOffsetOfPEntity( const edict_t *pEdict )
 {
+	if( !SV_EdictPointerInRange( pEdict ))
+	{
+		SV_LogBadEdictPointer( __func__, pEdict, SV_EdictPointerIndex( pEdict ), NULL, 0, "using world offset" );
+		return 0;
+	}
+
 	return (byte *)pEdict - (byte *)svgame.edicts;
 }
 
@@ -3463,9 +3534,12 @@ int GAME_EXPORT pfnIndexOfEdict( const edict_t *pEdict )
 
 	if( !pEdict ) return 0; // world ?
 
-	number = NUM_FOR_EDICT( pEdict );
-	if( number < 0 || number > GI->max_edicts )
-		Host_Error( "bad entity number %d\n", number );
+	number = SV_EdictPointerIndex( pEdict );
+	if( !SV_EdictPointerInRange( pEdict ) || number < 0 || number >= GI->max_edicts )
+	{
+		SV_LogBadEdictPointer( __func__, pEdict, number, NULL, 0, "using world entity" );
+		return 0;
+	}
 	return number;
 }
 

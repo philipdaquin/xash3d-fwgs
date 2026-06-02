@@ -53,11 +53,7 @@ extern int SV_UPDATE_BACKUP;
 #define GROUP_OP_AND	0
 #define GROUP_OP_NAND	1
 
-#ifdef NDEBUG
-#define SV_IsValidEdict( e )	( e && !e->free )
-#else
 #define SV_IsValidEdict( e )	SV_CheckEdict( e, __FILE__, __LINE__ )
-#endif
 #define NUM_FOR_EDICT(e)	((int)((edict_t *)(e) - svgame.edicts))
 #define EDICT_NUM( num )	SV_EdictNum( num )
 #define STRING( offset )	SV_GetString( offset )

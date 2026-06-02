@@ -709,7 +709,10 @@ static void SV_SendClientDatagram( sv_client_t *cl )
 			MSG_WriteBits( &msg, MSG_GetData( &cl->datagram ), MSG_GetNumBitsWritten( &cl->datagram ));
 		else if( host.realtime > cl->overflow_warn_time )
 		{
-			Con_DPrintf( S_WARN "Ignoring unreliable datagram for %s, would overflow on msg\n", cl->name );
+			Con_DPrintf( S_WARN "Ignoring unreliable datagram for %s (%s), would overflow on msg: datagram=%d msg_left=%d sv.time=%.3f realtime=%.3f\n",
+				cl->name, NET_AdrToString( cl->netchan.remote_address ),
+				MSG_GetNumBytesWritten( &cl->datagram ), MSG_GetNumBytesLeft( &msg ),
+				sv.time, host.realtime );
 			cl->overflow_warn_time = host.realtime + 5.0f;
 		}
 	}
@@ -796,13 +799,19 @@ static void SV_UpdateToReliableMessages( void )
 
 		if( MSG_GetNumBytesWritten( &sv.datagram ) < MSG_GetNumBytesLeft( &cl->datagram ))
 			MSG_WriteBits( &cl->datagram, MSG_GetData( &sv.datagram ), MSG_GetNumBitsWritten( &sv.datagram ));
-		else Con_DPrintf( S_WARN "Ignoring unreliable datagram for %s, would overflow\n", cl->name );
+		else Con_DPrintf( S_WARN "Ignoring unreliable datagram for %s (%s), would overflow: datagram=%d client_left=%d sv.time=%.3f realtime=%.3f\n",
+			cl->name, NET_AdrToString( cl->netchan.remote_address ),
+			MSG_GetNumBytesWritten( &sv.datagram ), MSG_GetNumBytesLeft( &cl->datagram ),
+			sv.time, host.realtime );
 
 		if( FBitSet( cl->flags, FCL_HLTV_PROXY ))
 		{
 			if( MSG_GetNumBytesWritten( &sv.spec_datagram ) < MSG_GetNumBytesLeft( &cl->datagram ))
 				MSG_WriteBits( &cl->datagram, MSG_GetData( &sv.spec_datagram ), MSG_GetNumBitsWritten( &sv.spec_datagram ));
-			else Con_DPrintf( S_WARN "Ignoring spectator datagram for %s, would overflow\n", cl->name );
+			else Con_DPrintf( S_WARN "Ignoring spectator datagram for %s (%s), would overflow: datagram=%d client_left=%d sv.time=%.3f realtime=%.3f\n",
+				cl->name, NET_AdrToString( cl->netchan.remote_address ),
+				MSG_GetNumBytesWritten( &sv.spec_datagram ), MSG_GetNumBytesLeft( &cl->datagram ),
+				sv.time, host.realtime );
 		}
 	}
 
