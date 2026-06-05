@@ -105,6 +105,8 @@ client_t		cl;
 client_static_t	cls;
 clgame_static_t	clgame;
 
+static char cl_server_disconnect_message[MAX_VA_STRING];
+
 //======================================================================
 int GAME_EXPORT CL_Active( void )
 {
@@ -1024,6 +1026,30 @@ void CL_Drop( void )
 	if( !cls.initialized )
 		return;
 	CL_Disconnect();
+
+	if( COM_CheckString( cl_server_disconnect_message ))
+	{
+		if( !UI_IsVisible() )
+			UI_SetActiveMenu( true );
+
+		if( !UI_IsVisible() || !UI_ShowMessageBox( cl_server_disconnect_message ))
+			Msg( "%s\n", cl_server_disconnect_message );
+
+		cl_server_disconnect_message[0] = '\0';
+	}
+}
+
+void CL_SetServerDisconnectMessage( const char *message )
+{
+	if( COM_CheckString( message ))
+	{
+		Q_snprintf( cl_server_disconnect_message, sizeof( cl_server_disconnect_message ),
+			"^3Server message^7\n%s", message );
+	}
+	else
+	{
+		cl_server_disconnect_message[0] = '\0';
+	}
 }
 
 static void CL_GetCDKey( char *protinfo, size_t protinfosize )

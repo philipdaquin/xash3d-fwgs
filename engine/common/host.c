@@ -819,6 +819,7 @@ void GAME_EXPORT Host_Error( const char *error, ... )
 {
 	static char	hosterror1[MAX_SYSPATH];
 	static char	hosterror2[MAX_SYSPATH];
+	char		finalmsg[MAX_SYSPATH + 64];
 	static qboolean	recursive = false;
 	va_list		argptr;
 
@@ -864,7 +865,9 @@ void GAME_EXPORT Host_Error( const char *error, ... )
 	COM_InitHostState();
 	Cbuf_Clear();
 
-	SV_Shutdown( "Server was killed due to an error\n" );
+	Q_snprintf( finalmsg, sizeof( finalmsg ), "Server was killed due to an error:\n%s", hosterror1 );
+	CL_SetServerDisconnectMessage( finalmsg );
+	SV_Shutdown( finalmsg );
 	CL_Drop(); // drop clients
 
 	// recreate world if needs

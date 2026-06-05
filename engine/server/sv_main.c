@@ -1024,7 +1024,7 @@ to totally exit after returning from this function.
 */
 void SV_FinalMessage( const char *message, qboolean reconnect )
 {
-	byte		msg_buf[1024];
+	byte		msg_buf[2048];
 	sv_client_t	*cl;
 	sizebuf_t		msg;
 	int		i;
@@ -1049,6 +1049,8 @@ void SV_FinalMessage( const char *message, qboolean reconnect )
 	else
 	{
 		MSG_BeginServerCmd( &msg, svc_disconnect );
+		if( COM_CheckString( message ))
+			MSG_WriteString( &msg, message );
 	}
 
 	// send it twice

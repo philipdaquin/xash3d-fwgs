@@ -799,6 +799,7 @@ void CL_ClearEdicts( void );
 void CL_Crashed( void );
 char *SV_Serverinfo( void );
 void CL_Drop( void );
+void CL_SetServerDisconnectMessage( const char *message );
 void Con_Init( void );
 void SCR_Init( void );
 void SCR_UpdateScreen( void );

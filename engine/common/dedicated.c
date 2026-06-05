@@ -64,6 +64,11 @@ void CL_Drop( void )
 
 }
 
+void CL_SetServerDisconnectMessage( const char *message )
+{
+	(void)message;
+}
+
 void CL_ClearEdicts( void )
 {
 

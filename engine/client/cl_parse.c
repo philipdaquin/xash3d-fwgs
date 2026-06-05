@@ -2523,6 +2523,8 @@ void CL_ParseServerMessage( sizebuf_t *msg )
 			// this does nothing
 			break;
 		case svc_disconnect:
+			if( MSG_GetNumBitsLeft( msg ) > 8 )
+				CL_SetServerDisconnectMessage( MSG_ReadString( msg ));
 			CL_Drop ();
 			Host_AbortCurrentFrame ();
 			break;
