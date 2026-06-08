@@ -173,6 +173,14 @@ typedef enum netchan_flags_e
 	NETCHAN_USE_LZSS  = BIT( 3 ), // mutually exclusive with bzip2
 } netchan_flags_t;
 
+typedef enum netchan_file_result_e
+{
+	NETCHAN_FILE_FAILED = 0,
+	NETCHAN_FILE_QUEUED,
+	NETCHAN_FILE_TOO_LARGE,
+	NETCHAN_FILE_QUEUE_FULL
+} netchan_file_result_t;
+
 // Network Connection Channel
 typedef struct netchan_s
 {
@@ -247,6 +255,10 @@ extern sizebuf_t		net_message;
 extern byte		net_message_buffer[NET_MAX_MESSAGE];
 extern convar_t		sv_lan;
 extern convar_t		sv_lan_rate;
+extern convar_t		sv_download_max_file_mb;
+extern convar_t		sv_download_max_queue_mb;
+extern convar_t		sv_download_compress_max_mb;
+extern convar_t		sv_download_prefer_ztmp;
 extern int		net_drop;
 
 void Netchan_Init( void );
@@ -256,7 +268,7 @@ void Netchan_CreateFileFragmentsFromBuffer( netchan_t *chan, const char *filenam
 qboolean Netchan_CopyNormalFragments( netchan_t *chan, sizebuf_t *msg, size_t *length );
 qboolean Netchan_CopyFileFragments( netchan_t *chan, sizebuf_t *msg );
 void Netchan_CreateFragments( netchan_t *chan, sizebuf_t *msg );
-int Netchan_CreateFileFragments( netchan_t *chan, const char *filename );
+netchan_file_result_t Netchan_CreateFileFragments( netchan_t *chan, const char *filename );
 void Netchan_TransmitBits( netchan_t *chan, int lengthInBits, const byte *data );
 void Netchan_OutOfBand( int net_socket, netadr_t adr, int length, const byte *data );
 void Netchan_OutOfBandPrint( int net_socket, netadr_t adr, const char *format, ... ) FORMAT_CHECK( 3 );

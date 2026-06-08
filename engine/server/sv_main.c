@@ -56,6 +56,10 @@ CVAR_DEFINE( sv_allow_download, "sv_allowdownload", "1", FCVAR_SERVER, "allow do
 static CVAR_DEFINE_AUTO( sv_allow_dlfile, "1", 0, "compatibility cvar, does nothing" );
 CVAR_DEFINE_AUTO( sv_uploadmax, "0.5", FCVAR_SERVER, "max size to upload custom resources (500 kB as default)" );
 CVAR_DEFINE_AUTO( sv_downloadurl, "", FCVAR_PROTECTED, "location from which clients can download missing files" );
+CVAR_DEFINE_AUTO( sv_download_max_file_mb, "64", FCVAR_SERVER, "max individual in-game download size in MB, 0 disables the limit" );
+CVAR_DEFINE_AUTO( sv_download_max_queue_mb, "128", FCVAR_SERVER, "max queued in-game download data per client in MB, 0 disables the limit" );
+CVAR_DEFINE_AUTO( sv_download_compress_max_mb, "16", FCVAR_SERVER, "max file size in MB to compress during live in-game download requests, 0 disables live compression" );
+CVAR_DEFINE_AUTO( sv_download_prefer_ztmp, "1", FCVAR_SERVER, "prefer existing .ztmp download caches when available" );
 CVAR_DEFINE( sv_consistency, "mp_consistency", "1", FCVAR_SERVER, "enbale consistency check in multiplayer" );
 CVAR_DEFINE_AUTO( mp_logecho, "1", 0, "log multiplayer frags to server logfile" );
 CVAR_DEFINE_AUTO( mp_logfile, "1", 0, "log multiplayer frags to console" );
@@ -946,6 +950,10 @@ void SV_Init( void )
 	Cvar_RegisterVariable( &sv_contact );
 	Cvar_RegisterVariable( &sv_consistency );
 	Cvar_RegisterVariable( &sv_downloadurl );
+	Cvar_RegisterVariable( &sv_download_max_file_mb );
+	Cvar_RegisterVariable( &sv_download_max_queue_mb );
+	Cvar_RegisterVariable( &sv_download_compress_max_mb );
+	Cvar_RegisterVariable( &sv_download_prefer_ztmp );
 	Cvar_RegisterVariable( &sv_novis );
 	Cvar_RegisterVariable( &sv_hostmap );
 	Cvar_DirectSet( &sv_hostmap, GI->startmap );
