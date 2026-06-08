@@ -181,6 +181,14 @@ typedef enum netchan_file_result_e
 	NETCHAN_FILE_QUEUE_FULL
 } netchan_file_result_t;
 
+typedef enum netchan_cache_result_e
+{
+	NETCHAN_CACHE_FAILED = 0,
+	NETCHAN_CACHE_SKIPPED,
+	NETCHAN_CACHE_PRESENT,
+	NETCHAN_CACHE_BUILT
+} netchan_cache_result_t;
+
 // Network Connection Channel
 typedef struct netchan_s
 {
@@ -269,6 +277,8 @@ qboolean Netchan_CopyNormalFragments( netchan_t *chan, sizebuf_t *msg, size_t *l
 qboolean Netchan_CopyFileFragments( netchan_t *chan, sizebuf_t *msg );
 void Netchan_CreateFragments( netchan_t *chan, sizebuf_t *msg );
 netchan_file_result_t Netchan_CreateFileFragments( netchan_t *chan, const char *filename );
+qboolean Netchan_HasPendingFileFragments( const netchan_t *chan );
+netchan_cache_result_t Netchan_PrebuildDownloadCache( const char *filename );
 void Netchan_TransmitBits( netchan_t *chan, int lengthInBits, const byte *data );
 void Netchan_OutOfBand( int net_socket, netadr_t adr, int length, const byte *data );
 void Netchan_OutOfBandPrint( int net_socket, netadr_t adr, const char *format, ... ) FORMAT_CHECK( 3 );

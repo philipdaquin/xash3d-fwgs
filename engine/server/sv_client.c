@@ -218,6 +218,7 @@ static qboolean SV_QueueDownloadFile( sv_client_t *cl, const char *filename )
 			Con_Printf( S_WARN "Dropping %s (%s): too many oversized in-game download requests\n",
 				cl->name, NET_AdrToString( cl->netchan.remote_address ));
 			SV_ClientPrintf( cl, "Too many oversized in-game download requests\n" );
+			NET_MasterClear();
 			SV_DropClient( cl, false );
 			return false;
 		}
@@ -227,6 +228,7 @@ static qboolean SV_QueueDownloadFile( sv_client_t *cl, const char *filename )
 		Con_Printf( S_WARN "Dropping %s (%s): in-game download queue exceeded server safety limit while requesting %s\n",
 			cl->name, NET_AdrToString( cl->netchan.remote_address ), filename );
 		SV_ClientPrintf( cl, "Download too large for in-game transfer\n" );
+		NET_MasterClear();
 		SV_DropClient( cl, false );
 		return false;
 	case NETCHAN_FILE_FAILED:
@@ -955,6 +957,7 @@ static void SV_ConnectNatClient( netadr_t from )
 		return;
 
 	SV_Info( to, PROTOCOL_VERSION );
+	NET_MasterClear();
 }
 
 /*

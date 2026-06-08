@@ -463,8 +463,14 @@ static void SV_ReadPackets( void )
 	sv.current_client = NULL;
 }
 
-static void SV_DropTimedOutClient( sv_client_t *cl, qboolean ban )
+static qboolean SV_ClientHasPendingDownload( const sv_client_t *cl )
 {
+	return cl && Netchan_HasPendingFileFragments( &cl->netchan );
+}
+
+static void SV_DropTimedOutClient( sv_client_t *cl, const char *reason, qboolean ban, qboolean refresh_master )
+{
+	Con_Printf( S_WARN "%s timed out (%s)\n", cl->name, reason );
 	SV_BroadcastPrintf( NULL, "%s timed out\n", cl->name );
 	SV_DropClient( cl, false );
 	cl->state = cs_free; // don't bother with zombie state
@@ -473,6 +479,9 @@ static void SV_DropTimedOutClient( sv_client_t *cl, qboolean ban )
 	{
 		Cbuf_AddTextf( "addip %g %s\n", sv_connect_timeout_ban_time.value, NET_BaseAdrToString( cl->netchan.remote_address ));
 	}
+
+	if( refresh_master )
+		NET_MasterClear();
 }
 
 /*
@@ -515,20 +524,48 @@ static void SV_CheckTimeouts( void )
 			cl->state = cs_free; // can now be reused
 			break;
 		case cs_connected:
-		case cs_spawning:
+		{
+			qboolean pending_download = SV_ClientHasPendingDownload( cl );
+
 			if( !NET_IsLocalAddress( cl->netchan.remote_address ))
 			{
-				if( cl->connection_started < connected_droppoint )
-					SV_DropTimedOutClient( cl, sv_connect_timeout_ban.value > 0.0f );
+				if( pending_download )
+				{
+					if( cl->connection_started < connected_droppoint )
+						SV_DropTimedOutClient( cl, "download timeout", false, true );
+				}
+				else if( cl->connection_started < connected_droppoint )
+					SV_DropTimedOutClient( cl, "connect timeout", sv_connect_timeout_ban.value > 0.0f, false );
 			}
 			break;
+		}
+		case cs_spawning:
+		{
+			qboolean pending_download = SV_ClientHasPendingDownload( cl );
+
+			if( !NET_IsLocalAddress( cl->netchan.remote_address ))
+			{
+				if( pending_download )
+				{
+					if( cl->connection_started < connected_droppoint )
+						SV_DropTimedOutClient( cl, "download timeout", false, true );
+				}
+				else if( cl->connection_started < connected_droppoint )
+					SV_DropTimedOutClient( cl, "spawn timeout", sv_connect_timeout_ban.value > 0.0f, false );
+			}
+			break;
+		}
 		case cs_spawned:
+		{
+			qboolean pending_download = SV_ClientHasPendingDownload( cl );
+
 			if( !NET_IsLocalAddress( cl->netchan.remote_address ))
 			{
 				if( cl->netchan.last_received < spawned_droppoint )
-					SV_DropTimedOutClient( cl, false );
+					SV_DropTimedOutClient( cl, pending_download ? "download timeout" : "game timeout", false, pending_download );
 			}
 			break;
+		}
 		default:
 			break;
 		}

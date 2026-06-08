@@ -67,6 +67,93 @@ static fs_offset_t Netchan_FileQueueBytes( const netchan_t *chan )
 	return total;
 }
 
+qboolean Netchan_HasPendingFileFragments( const netchan_t *chan )
+{
+	return chan && ( chan->waitlist[FRAG_FILE_STREAM] != NULL || chan->fragbufs[FRAG_FILE_STREAM] != NULL );
+}
+
+static netchan_cache_result_t Netchan_PrebuildDownloadCacheFromBuffer( const char *filename, const byte *buffer, fs_offset_t filesize, fs_offset_t fileTime )
+{
+	char compressedfilename[MAX_OSPATH + 5];
+	fs_offset_t compressedFileTime;
+	byte *compressed = NULL;
+	uint compressedSize = 0;
+
+	if( !COM_CheckString( filename ) || filename[0] == '!' )
+		return NETCHAN_CACHE_SKIPPED;
+
+	if( !COM_IsSafeFileToDownload( filename ))
+	{
+		Con_Printf( S_WARN "Skipping cache prebuild for unsafe path %s\n", filename );
+		return NETCHAN_CACHE_SKIPPED;
+	}
+
+	if( Q_strlen( filename ) > sizeof( compressedfilename ) - 5 - 1 )
+	{
+		Con_Printf( S_WARN "Skipping cache prebuild for %s due to path length overflow\n", filename );
+		return NETCHAN_CACHE_FAILED;
+	}
+
+	if( Netchan_SizeExceedsLimit( filesize, sv_download_max_file_mb.value ))
+	{
+		Con_Printf( S_WARN "Skipping cache prebuild for %s: file is %s, download limit is %.1f MB\n",
+			filename, Q_memprint( filesize ), sv_download_max_file_mb.value );
+		return NETCHAN_CACHE_SKIPPED;
+	}
+
+	Q_snprintf( compressedfilename, sizeof( compressedfilename ), "%s.ztmp", filename );
+	compressedFileTime = FS_FileTime( compressedfilename, false );
+
+	if( sv_download_prefer_ztmp.value && compressedFileTime >= fileTime )
+	{
+		if( FS_FileSize( compressedfilename, false ) > 0 )
+			return NETCHAN_CACHE_PRESENT;
+	}
+
+	compressed = LZSS_Compress( (byte *)buffer, filesize, &compressedSize );
+	if( compressed && compressedSize > 0 && compressedSize < filesize )
+	{
+		Con_DPrintf( "Prebuilt download cache %s (%s -> %s)\n", filename, Q_memprint( filesize ), Q_memprint( compressedSize ));
+		FS_WriteFile( compressedfilename, compressed, compressedSize );
+		free( compressed );
+		return NETCHAN_CACHE_BUILT;
+	}
+
+	if( compressed )
+		free( compressed );
+
+	return NETCHAN_CACHE_SKIPPED;
+}
+
+netchan_cache_result_t Netchan_PrebuildDownloadCache( const char *filename )
+{
+	byte *buffer;
+	fs_offset_t filesize;
+	fs_offset_t fileTime;
+	netchan_cache_result_t result;
+
+	if( !COM_CheckString( filename ) || filename[0] == '!' )
+		return NETCHAN_CACHE_SKIPPED;
+
+	fileTime = FS_FileTime( filename, false );
+	if( fileTime < 0 )
+	{
+		Con_Printf( S_WARN "Unable to stat %s for cache prebuild\n", filename );
+		return NETCHAN_CACHE_FAILED;
+	}
+
+	buffer = FS_LoadFile( filename, &filesize, false );
+	if( !buffer )
+	{
+		Con_Printf( S_WARN "Unable to load %s for cache prebuild\n", filename );
+		return NETCHAN_CACHE_FAILED;
+	}
+
+	result = Netchan_PrebuildDownloadCacheFromBuffer( filename, buffer, filesize, fileTime );
+	Mem_Free( buffer );
+	return result;
+}
+
 /*
 packet header ( size in bits )
 -------------
