@@ -917,6 +917,7 @@ static void SV_ConnectNatClient( netadr_t from )
 	if( NET_IsReservedAdr( to ))
 		return;
 
+	NET_MasterClear();
 	SV_Info( to, PROTOCOL_VERSION );
 }
 

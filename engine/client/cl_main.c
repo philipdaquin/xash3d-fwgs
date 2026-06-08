@@ -80,7 +80,7 @@ CVAR_DEFINE_AUTO( cl_trace_consistency, "0", 0, "enable consistency info tracing
 CVAR_DEFINE_AUTO( cl_trace_stufftext, "0", 0, "enable stufftext (server-to-client console commands) tracing (good for developers)" );
 CVAR_DEFINE_AUTO( cl_trace_messages, "0", FCVAR_CHEAT, "enable message names tracing (good for developers)" );
 CVAR_DEFINE_AUTO( cl_trace_events, "0", FCVAR_CHEAT, "enable events tracing (good for developers)" );
-static CVAR_DEFINE_AUTO( cl_nat, "0", 0, "show servers running under NAT" );
+static CVAR_DEFINE_AUTO( cl_nat, "1", 0, "include servers running under NAT in internet server scans" );
 CVAR_DEFINE_AUTO( hud_utf8, "0", FCVAR_ARCHIVE, "Use utf-8 encoding for hud text" );
 // CVAR_DEFINE_AUTO( ui_renderworld, "0", FCVAR_ARCHIVE, "render world when UI is visible" );
 CVAR_DEFINE_AUTO( ui_renderworld, "1", FCVAR_ARCHIVE, "render world when UI is visible" );

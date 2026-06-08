@@ -433,6 +433,7 @@ extern convar_t		coop;
 extern convar_t		sv_cheats;
 extern convar_t		public_server;
 extern convar_t		sv_nat;
+extern convar_t		sv_master_response_timeout;
 extern convar_t		sv_speedhack_kick;
 extern convar_t		sv_pausable;		// allows pause in multiplayer
 extern convar_t		sv_check_errors;

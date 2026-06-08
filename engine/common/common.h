@@ -903,6 +903,8 @@ void NET_MasterHeartbeat( void );
 void NET_MasterClear( void );
 void NET_MasterShutdown( void );
 qboolean NET_GetMaster( netadr_t from, uint *challenge, double *last_heartbeat );
+void NET_MasterResponseSuccess( netadr_t from );
+void NET_MasterResponseFailure( netadr_t from, const char *reason );
 qboolean NET_MasterQuery( uint32_t key, qboolean net, const char *filter );
 
 //

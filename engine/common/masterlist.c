@@ -28,6 +28,11 @@ typedef struct master_s
 
 	uint heartbeat_challenge;
 	double last_heartbeat;
+	double last_heartbeat_sent;
+	qboolean heartbeat_pending;
+	int retry_count;
+	double last_success;
+	const char *last_failure;
 
 	double resolve_time;
 } master_t;
@@ -39,9 +44,52 @@ static struct masterlist_s
 } ml;
 
 static CVAR_DEFINE_AUTO( sv_verbose_heartbeats, "0", 0, "print every heartbeat to console" );
+CVAR_DEFINE_AUTO( sv_master_heartbeat_interval, "300", FCVAR_ARCHIVE, "master server heartbeat interval in seconds" );
+CVAR_DEFINE_AUTO( sv_master_nat_heartbeat_interval, "30", FCVAR_ARCHIVE, "master server heartbeat interval in seconds for NAT servers" );
+CVAR_DEFINE_AUTO( sv_master_retry_interval, "10", FCVAR_ARCHIVE, "master server heartbeat retry interval after failed validation" );
+CVAR_DEFINE_AUTO( sv_master_response_timeout, "8", FCVAR_ARCHIVE, "master server heartbeat response timeout in seconds" );
 
-#define HEARTBEAT_SECONDS      ((sv_nat.value > 0.0f) ? 60.0f : 300.0f) // 1 or 5 minutes
 #define RESOLVE_EXPIRE_SECONDS (60.0f) // 1 minute to expire
+
+static master_t *NET_GetMasterFromAdr( netadr_t adr );
+
+static double NET_MasterHeartbeatInterval( void )
+{
+	const float interval = sv_nat.value > 0.0f ? sv_master_nat_heartbeat_interval.value : sv_master_heartbeat_interval.value;
+	return Q_max( 1.0f, interval );
+}
+
+static double NET_MasterRetryInterval( void )
+{
+	return Q_max( 0.0f, sv_master_retry_interval.value );
+}
+
+static void NET_MasterSetFailure( master_t *m, const char *reason )
+{
+	m->last_failure = reason;
+}
+
+static const char *NET_MasterLastFailure( const master_t *m )
+{
+	return m->last_failure ? m->last_failure : "none";
+}
+
+static void NET_MasterScheduleRetry( master_t *m, const char *reason )
+{
+	const double interval = NET_MasterHeartbeatInterval();
+	const double retry = NET_MasterRetryInterval();
+
+	m->heartbeat_pending = false;
+	m->retry_count++;
+	NET_MasterSetFailure( m, reason );
+	m->last_heartbeat = host.realtime - interval + retry;
+
+	if( sv_verbose_heartbeats.value )
+	{
+		Con_Printf( S_NOTE "master %s: %s, retry in %.1f seconds\n",
+			m->address, reason, retry );
+	}
+}
 
 static size_t NET_BuildMasterServerScanRequest( char *buf, size_t size, uint32_t key, qboolean nat, const char *filter, connprotocol_t proto )
 {
@@ -100,12 +148,17 @@ static net_gai_state_t NET_GetMasterHostByName( master_t *m )
 	if( res == NET_EAI_OK )
 	{
 		m->resolve_time = host.realtime + RESOLVE_EXPIRE_SECONDS;
+		if( sv_verbose_heartbeats.value )
+			Con_Printf( S_NOTE "master %s resolved as %s\n", m->address, NET_AdrToString( m->adr ));
 		return res;
 	}
 
 	m->adr.type = 0;
 	if( res == NET_EAI_NONAME )
+	{
+		NET_MasterSetFailure( m, "dns failed" );
 		Con_Reportf( "Can't resolve adr: %s\n", m->address );
+	}
 
 	return res;
 }
@@ -183,11 +236,15 @@ static void NET_AnnounceToMaster( master_t *m )
 	MSG_WriteDword( &msg, m->heartbeat_challenge );
 
 	NET_SendPacket( NS_SERVER, MSG_GetNumBytesWritten( &msg ), MSG_GetData( &msg ), m->adr );
+	m->last_heartbeat = host.realtime;
+	m->last_heartbeat_sent = host.realtime;
+	m->heartbeat_pending = true;
+	NET_MasterSetFailure( m, "pending validation" );
 
 	if( sv_verbose_heartbeats.value )
 	{
-		Con_Printf( S_NOTE "sent heartbeat to %s (%s, 0x%x)\n",
-			m->address, NET_AdrToString( m->adr ), m->heartbeat_challenge );
+		Con_Printf( S_NOTE "sent heartbeat to %s (%s, 0x%x, retry %d)\n",
+			m->address, NET_AdrToString( m->adr ), m->heartbeat_challenge, m->retry_count );
 	}
 }
 
@@ -202,7 +259,13 @@ void NET_MasterClear( void )
 	master_t *m;
 
 	for( m = ml.head; m; m = m->next )
+	{
 		m->last_heartbeat = MAX_HEARTBEAT;
+		m->last_heartbeat_sent = MAX_HEARTBEAT;
+		m->heartbeat_pending = false;
+		m->retry_count = 0;
+		NET_MasterSetFailure( m, "forced heartbeat" );
+	}
 }
 
 /*
@@ -241,35 +304,75 @@ NET_MasterHeartbeat
 void NET_MasterHeartbeat( void )
 {
 	master_t *m;
+	const double interval = NET_MasterHeartbeatInterval();
 
 	if(( !public_server.value && !sv_nat.value ) || svs.maxclients == 1 )
 		return; // only public servers send heartbeats
 
 	for( m = ml.head; m; m = m->next )
 	{
-		if( host.realtime - m->last_heartbeat < HEARTBEAT_SECONDS )
+		if( m->gs )
 			continue;
 
-		if( m->gs )
+		if( m->heartbeat_pending )
+		{
+			if( m->last_heartbeat_sent + sv_master_response_timeout.value >= host.realtime )
+				continue;
+
+			NET_MasterScheduleRetry( m, "master response timeout" );
+		}
+
+		if( host.realtime - m->last_heartbeat < interval )
 			continue;
 
 		switch( NET_GetMasterHostByName( m ))
 		{
 		case NET_EAI_AGAIN:
 			m->last_heartbeat = MAX_HEARTBEAT; // retry on next frame
+			NET_MasterSetFailure( m, "dns pending" );
 			if( sv_verbose_heartbeats.value )
 				Con_Printf( S_NOTE "delay heartbeat to next frame until %s resolves\n", m->address );
 
 			break;
 		case NET_EAI_NONAME:
 			m->last_heartbeat = host.realtime; // try to resolve again on next heartbeat
+			if( sv_verbose_heartbeats.value )
+				Con_Printf( S_NOTE "master %s: DNS failed, retry on next heartbeat interval\n", m->address );
 			break;
 		case NET_EAI_OK:
-			m->last_heartbeat = host.realtime;
 			NET_AnnounceToMaster( m );
 			break;
 		}
 	}
+}
+
+void NET_MasterResponseSuccess( netadr_t from )
+{
+	master_t *m = NET_GetMasterFromAdr( from );
+
+	if( !m )
+		return;
+
+	m->heartbeat_pending = false;
+	m->retry_count = 0;
+	m->last_success = host.realtime;
+	NET_MasterSetFailure( m, "none" );
+
+	if( sv_verbose_heartbeats.value )
+	{
+		Con_Printf( S_NOTE "master %s (%s): heartbeat validated\n",
+			m->address, NET_AdrToString( m->adr ));
+	}
+}
+
+void NET_MasterResponseFailure( netadr_t from, const char *reason )
+{
+	master_t *m = NET_GetMasterFromAdr( from );
+
+	if( !m )
+		return;
+
+	NET_MasterScheduleRetry( m, reason );
 }
 
 /*
@@ -437,6 +540,7 @@ static void NET_ListMasters_f( void )
 		Con_Printf( "%d\t%s", i, master->address );
 		if( master->adr.type != 0 )
 			Con_Printf( "\t%s", NET_AdrToString( master->adr ));
+		else Con_Printf( "\tunresolved" );
 
 		if( master->gs )
 			Con_Printf( " GoldSrc" );
@@ -444,6 +548,14 @@ static void NET_ListMasters_f( void )
 		if( master->v6only )
 			Con_Printf( " IPv6-only");
 
+		Con_Printf( " pending:%s retries:%d",
+			master->heartbeat_pending ? "yes" : "no", master->retry_count );
+
+		if( master->last_success > 0.0 )
+			Con_Printf( " last_success:%.1fs", host.realtime - master->last_success );
+		else Con_Printf( " last_success:never" );
+
+		Con_Printf( " last_failure:%s", NET_MasterLastFailure( master ));
 		Con_Printf( "\n" );
 	}
 }
@@ -563,6 +675,10 @@ void NET_InitMasters( void )
 	Cmd_AddCommand( "listmasters", NET_ListMasters_f, "list masterservers" );
 
 	Cvar_RegisterVariable( &sv_verbose_heartbeats );
+	Cvar_RegisterVariable( &sv_master_heartbeat_interval );
+	Cvar_RegisterVariable( &sv_master_nat_heartbeat_interval );
+	Cvar_RegisterVariable( &sv_master_retry_interval );
+	Cvar_RegisterVariable( &sv_master_response_timeout );
 
 	{ // IPv4-only
 		NET_AddMaster( "mentality.rip:27010" );
