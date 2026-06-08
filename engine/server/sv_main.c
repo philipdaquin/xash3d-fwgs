@@ -56,6 +56,10 @@ CVAR_DEFINE( sv_allow_download, "sv_allowdownload", "1", FCVAR_SERVER, "allow do
 static CVAR_DEFINE_AUTO( sv_allow_dlfile, "1", 0, "compatibility cvar, does nothing" );
 CVAR_DEFINE_AUTO( sv_uploadmax, "0.5", FCVAR_SERVER, "max size to upload custom resources (500 kB as default)" );
 CVAR_DEFINE_AUTO( sv_downloadurl, "", FCVAR_PROTECTED, "location from which clients can download missing files" );
+CVAR_DEFINE_AUTO( sv_download_max_file_mb, "64", FCVAR_SERVER, "max individual in-game download size in MB, 0 disables the limit" );
+CVAR_DEFINE_AUTO( sv_download_max_queue_mb, "128", FCVAR_SERVER, "max queued in-game download data per client in MB, 0 disables the limit" );
+CVAR_DEFINE_AUTO( sv_download_compress_max_mb, "16", FCVAR_SERVER, "max file size in MB to compress during live in-game download requests, 0 disables live compression" );
+CVAR_DEFINE_AUTO( sv_download_prefer_ztmp, "1", FCVAR_SERVER, "prefer existing .ztmp download caches when available" );
 CVAR_DEFINE( sv_consistency, "mp_consistency", "1", FCVAR_SERVER, "enbale consistency check in multiplayer" );
 CVAR_DEFINE_AUTO( mp_logecho, "1", 0, "log multiplayer frags to server logfile" );
 CVAR_DEFINE_AUTO( mp_logfile, "1", 0, "log multiplayer frags to console" );
@@ -458,8 +462,14 @@ static void SV_ReadPackets( void )
 	sv.current_client = NULL;
 }
 
-static void SV_DropTimedOutClient( sv_client_t *cl, qboolean ban )
+static qboolean SV_ClientHasPendingDownload( const sv_client_t *cl )
 {
+	return cl && Netchan_HasPendingFileFragments( &cl->netchan );
+}
+
+static void SV_DropTimedOutClient( sv_client_t *cl, const char *reason, qboolean ban, qboolean refresh_master )
+{
+	Con_Printf( S_WARN "%s timed out (%s)\n", cl->name, reason );
 	SV_BroadcastPrintf( NULL, "%s timed out\n", cl->name );
 	SV_DropClient( cl, false );
 	cl->state = cs_free; // don't bother with zombie state
@@ -468,6 +478,9 @@ static void SV_DropTimedOutClient( sv_client_t *cl, qboolean ban )
 	{
 		Cbuf_AddTextf( "addip %g %s\n", sv_connect_timeout_ban_time.value, NET_BaseAdrToString( cl->netchan.remote_address ));
 	}
+
+	if( refresh_master )
+		NET_MasterClear();
 }
 
 /*
@@ -510,20 +523,48 @@ static void SV_CheckTimeouts( void )
 			cl->state = cs_free; // can now be reused
 			break;
 		case cs_connected:
-		case cs_spawning:
+		{
+			qboolean pending_download = SV_ClientHasPendingDownload( cl );
+
 			if( !NET_IsLocalAddress( cl->netchan.remote_address ))
 			{
-				if( cl->connection_started < connected_droppoint )
-					SV_DropTimedOutClient( cl, sv_connect_timeout_ban.value > 0.0f );
+				if( pending_download )
+				{
+					if( cl->connection_started < connected_droppoint )
+						SV_DropTimedOutClient( cl, "download timeout", false, true );
+				}
+				else if( cl->connection_started < connected_droppoint )
+					SV_DropTimedOutClient( cl, "connect timeout", sv_connect_timeout_ban.value > 0.0f, false );
 			}
 			break;
+		}
+		case cs_spawning:
+		{
+			qboolean pending_download = SV_ClientHasPendingDownload( cl );
+
+			if( !NET_IsLocalAddress( cl->netchan.remote_address ))
+			{
+				if( pending_download )
+				{
+					if( cl->connection_started < connected_droppoint )
+						SV_DropTimedOutClient( cl, "download timeout", false, true );
+				}
+				else if( cl->connection_started < connected_droppoint )
+					SV_DropTimedOutClient( cl, "spawn timeout", sv_connect_timeout_ban.value > 0.0f, false );
+			}
+			break;
+		}
 		case cs_spawned:
+		{
+			qboolean pending_download = SV_ClientHasPendingDownload( cl );
+
 			if( !NET_IsLocalAddress( cl->netchan.remote_address ))
 			{
 				if( cl->netchan.last_received < spawned_droppoint )
-					SV_DropTimedOutClient( cl, false );
+					SV_DropTimedOutClient( cl, pending_download ? "download timeout" : "game timeout", false, pending_download );
 			}
 			break;
+		}
 		default:
 			break;
 		}
@@ -948,6 +989,10 @@ void SV_Init( void )
 	Cvar_RegisterVariable( &sv_contact );
 	Cvar_RegisterVariable( &sv_consistency );
 	Cvar_RegisterVariable( &sv_downloadurl );
+	Cvar_RegisterVariable( &sv_download_max_file_mb );
+	Cvar_RegisterVariable( &sv_download_max_queue_mb );
+	Cvar_RegisterVariable( &sv_download_compress_max_mb );
+	Cvar_RegisterVariable( &sv_download_prefer_ztmp );
 	Cvar_RegisterVariable( &sv_novis );
 	Cvar_RegisterVariable( &sv_hostmap );
 	Cvar_DirectSet( &sv_hostmap, GI->startmap );

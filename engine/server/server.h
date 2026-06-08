@@ -236,6 +236,7 @@ typedef struct sv_client_s
 	customization_t customdata;      // player customization linked list
 	resource_t      resourcesonhand;
 	resource_t      resourcesneeded; // <mapname.res> from client (server downloading)
+	int             download_rejects;
 	usercmd_t       lastcmd;         // for filling in big drops
 
 	int    packet_loss;
@@ -403,6 +404,10 @@ extern convar_t		sv_send_resources;
 extern convar_t		sv_send_logos;
 extern convar_t		sv_allow_upload;
 extern convar_t		sv_allow_download;
+extern convar_t		sv_download_max_file_mb;
+extern convar_t		sv_download_max_queue_mb;
+extern convar_t		sv_download_compress_max_mb;
+extern convar_t		sv_download_prefer_ztmp;
 extern convar_t		sv_friction;
 extern convar_t		sv_gravity;
 extern convar_t		sv_stopspeed;

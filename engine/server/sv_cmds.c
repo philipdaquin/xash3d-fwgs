@@ -1013,6 +1013,114 @@ static void SV_ListMessages_f( void )
 	Con_Printf( "Total %i messages\n", i - 1 );
 }
 
+static const char *SV_PrebuildDownloadResourcePath( const resource_t *res, char *path, size_t size )
+{
+	if( !res || !COM_CheckString( res->szFileName ))
+		return NULL;
+
+	switch( res->type )
+	{
+	case t_sound:
+		if( res->szFileName[0] == '!' )
+			return NULL;
+		Q_snprintf( path, size, DEFAULT_SOUNDPATH "%s", res->szFileName );
+		return path;
+	case t_model:
+		if( res->szFileName[0] == '*' )
+			return NULL;
+		return res->szFileName;
+	case t_generic:
+	case t_eventscript:
+		return res->szFileName;
+	default:
+		return NULL;
+	}
+}
+
+static void SV_PrebuildDownloadCaches_f( void )
+{
+	int i;
+	int built = 0;
+	int present = 0;
+	int skipped = 0;
+	int failed = 0;
+
+	if( sv.state == ss_dead || !sv.num_resources )
+	{
+		Con_Printf( "^3no server running.\n" );
+		return;
+	}
+
+	Con_Printf( "Prebuilding download caches for %i resources...\n", sv.num_resources );
+
+	for( i = 0; i < sv.num_resources; i++ )
+	{
+		const resource_t *res = &sv.resources[i];
+		netchan_cache_result_t result;
+		char filepath[MAX_OSPATH];
+		const char *path = SV_PrebuildDownloadResourcePath( res, filepath, sizeof( filepath ));
+
+		if( !path )
+		{
+			skipped++;
+			continue;
+		}
+
+		result = Netchan_PrebuildDownloadCache( path );
+		switch( result )
+		{
+		case NETCHAN_CACHE_BUILT:
+			built++;
+			Con_Printf( "  built    %s\n", path );
+			break;
+		case NETCHAN_CACHE_PRESENT:
+			present++;
+			Con_Printf( "  present  %s\n", path );
+			break;
+		case NETCHAN_CACHE_SKIPPED:
+			skipped++;
+			break;
+		case NETCHAN_CACHE_FAILED:
+		default:
+			failed++;
+			Con_Printf( "  failed   %s\n", path );
+			break;
+		}
+
+		if( res->type == t_model )
+		{
+			const char *texname = Mod_StudioTexName( res->szFileName );
+
+			if( FS_FileExists( texname, false ) > 0 )
+			{
+				result = Netchan_PrebuildDownloadCache( texname );
+				switch( result )
+				{
+				case NETCHAN_CACHE_BUILT:
+					built++;
+					Con_Printf( "  built    %s\n", texname );
+					break;
+				case NETCHAN_CACHE_PRESENT:
+					present++;
+					Con_Printf( "  present  %s\n", texname );
+					break;
+				case NETCHAN_CACHE_SKIPPED:
+					skipped++;
+					break;
+				case NETCHAN_CACHE_FAILED:
+				default:
+					failed++;
+					Con_Printf( "  failed   %s\n", texname );
+					break;
+				}
+			}
+		}
+	}
+
+	Con_Printf( "Cache prebuild summary: built=%i present=%i skipped=%i failed=%i\n",
+		built, present, skipped, failed );
+}
+
 /*
 ==================
 SV_InitHostCommands
@@ -1066,6 +1174,7 @@ void SV_InitOperatorCommands( void )
 	Cmd_AddCommand( "log", SV_ServerLog_f, "enables logging to file" );
 	Cmd_AddCommand( "str64stats", SV_PrintStr64Stats_f, "print engine pool string statistics" );
 	Cmd_AddCommand( "sv_list_messages", SV_ListMessages_f, "list registered user messages" );
+	Cmd_AddCommand( "sv_prebuild_download_caches", SV_PrebuildDownloadCaches_f, "prebuild download caches for current map resources" );
 
 	if( host.type == HOST_NORMAL )
 	{
@@ -1105,6 +1214,8 @@ void SV_KillOperatorCommands( void )
 	Cmd_RemoveCommand( "logaddress" );
 	Cmd_RemoveCommand( "log" );
 	Cmd_RemoveCommand( "str64stats" );
+	Cmd_RemoveCommand( "sv_list_messages" );
+	Cmd_RemoveCommand( "sv_prebuild_download_caches" );
 
 	if( host.type == HOST_NORMAL )
 	{

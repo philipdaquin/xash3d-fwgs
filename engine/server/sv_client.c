@@ -199,6 +199,45 @@ static void SV_FailDownload( sv_client_t *cl, const char *filename )
 	MSG_WriteString( &cl->netchan.message, filename );
 }
 
+static qboolean SV_QueueDownloadFile( sv_client_t *cl, const char *filename )
+{
+	const int max_download_rejects = 3;
+	netchan_file_result_t result = Netchan_CreateFileFragments( &cl->netchan, filename );
+
+	switch( result )
+	{
+	case NETCHAN_FILE_QUEUED:
+		cl->download_rejects = 0;
+		return true;
+	case NETCHAN_FILE_TOO_LARGE:
+		cl->download_rejects++;
+		Con_Printf( S_WARN "Refusing oversized in-game download %s for %s (%s)\n",
+			filename, cl->name, NET_AdrToString( cl->netchan.remote_address ));
+		if( cl->download_rejects >= max_download_rejects )
+		{
+			Con_Printf( S_WARN "Dropping %s (%s): too many oversized in-game download requests\n",
+				cl->name, NET_AdrToString( cl->netchan.remote_address ));
+			SV_ClientPrintf( cl, "Too many oversized in-game download requests\n" );
+			NET_MasterClear();
+			SV_DropClient( cl, false );
+			return false;
+		}
+		SV_FailDownload( cl, filename );
+		return false;
+	case NETCHAN_FILE_QUEUE_FULL:
+		Con_Printf( S_WARN "Dropping %s (%s): in-game download queue exceeded server safety limit while requesting %s\n",
+			cl->name, NET_AdrToString( cl->netchan.remote_address ), filename );
+		SV_ClientPrintf( cl, "Download too large for in-game transfer\n" );
+		NET_MasterClear();
+		SV_DropClient( cl, false );
+		return false;
+	case NETCHAN_FILE_FAILED:
+	default:
+		SV_FailDownload( cl, filename );
+		return false;
+	}
+}
+
 /*
 ================
 SV_CheckChallenge
@@ -919,6 +958,7 @@ static void SV_ConnectNatClient( netadr_t from )
 
 	NET_MasterClear();
 	SV_Info( to, PROTOCOL_VERSION );
+	NET_MasterClear();
 }
 
 /*
@@ -2108,10 +2148,13 @@ static qboolean SV_DownloadFile_f( sv_client_t *cl )
 			if( !Q_stricmp( COM_FileExtension( name ), "mdl" ))
 			{
 				if( FS_FileExists( Mod_StudioTexName( name ), false ) > 0 )
-					Netchan_CreateFileFragments( &cl->netchan, Mod_StudioTexName( name ));
+				{
+					if( !SV_QueueDownloadFile( cl, Mod_StudioTexName( name )))
+						return true;
+				}
 			}
 
-			if( Netchan_CreateFileFragments( &cl->netchan, name ))
+			if( SV_QueueDownloadFile( cl, name ))
 			{
 				Netchan_FragSend( &cl->netchan );
 				return true;

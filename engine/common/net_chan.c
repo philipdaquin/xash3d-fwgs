@@ -36,6 +36,124 @@ GNU General Public License for more details.
 void Netchan_FlushIncoming( netchan_t *chan, int stream );
 void Netchan_AddBufferToList( fragbuf_t **pplist, fragbuf_t *pbuf );
 
+static fs_offset_t Netchan_MegabytesToBytes( float megabytes )
+{
+	if( megabytes <= 0.0f )
+		return 0;
+	return (fs_offset_t)( megabytes * 1024.0f * 1024.0f );
+}
+
+static qboolean Netchan_SizeExceedsLimit( fs_offset_t size, float limit_mb )
+{
+	fs_offset_t limit = Netchan_MegabytesToBytes( limit_mb );
+	return limit > 0 && size > limit;
+}
+
+static fs_offset_t Netchan_FileQueueBytes( const netchan_t *chan )
+{
+	const fragbufwaiting_t *wait;
+	const fragbuf_t *buf;
+	fs_offset_t total = 0;
+
+	for( wait = chan->waitlist[FRAG_FILE_STREAM]; wait; wait = wait->next )
+	{
+		for( buf = wait->fragbufs; buf; buf = buf->next )
+			total += buf->size;
+	}
+
+	for( buf = chan->fragbufs[FRAG_FILE_STREAM]; buf; buf = buf->next )
+		total += buf->size;
+
+	return total;
+}
+
+qboolean Netchan_HasPendingFileFragments( const netchan_t *chan )
+{
+	return chan && ( chan->waitlist[FRAG_FILE_STREAM] != NULL || chan->fragbufs[FRAG_FILE_STREAM] != NULL );
+}
+
+static netchan_cache_result_t Netchan_PrebuildDownloadCacheFromBuffer( const char *filename, const byte *buffer, fs_offset_t filesize, fs_offset_t fileTime )
+{
+	char compressedfilename[MAX_OSPATH + 5];
+	fs_offset_t compressedFileTime;
+	byte *compressed = NULL;
+	uint compressedSize = 0;
+
+	if( !COM_CheckString( filename ) || filename[0] == '!' )
+		return NETCHAN_CACHE_SKIPPED;
+
+	if( !COM_IsSafeFileToDownload( filename ))
+	{
+		Con_Printf( S_WARN "Skipping cache prebuild for unsafe path %s\n", filename );
+		return NETCHAN_CACHE_SKIPPED;
+	}
+
+	if( Q_strlen( filename ) > sizeof( compressedfilename ) - 5 - 1 )
+	{
+		Con_Printf( S_WARN "Skipping cache prebuild for %s due to path length overflow\n", filename );
+		return NETCHAN_CACHE_FAILED;
+	}
+
+	if( Netchan_SizeExceedsLimit( filesize, sv_download_max_file_mb.value ))
+	{
+		Con_Printf( S_WARN "Skipping cache prebuild for %s: file is %s, download limit is %.1f MB\n",
+			filename, Q_memprint( filesize ), sv_download_max_file_mb.value );
+		return NETCHAN_CACHE_SKIPPED;
+	}
+
+	Q_snprintf( compressedfilename, sizeof( compressedfilename ), "%s.ztmp", filename );
+	compressedFileTime = FS_FileTime( compressedfilename, false );
+
+	if( sv_download_prefer_ztmp.value && compressedFileTime >= fileTime )
+	{
+		if( FS_FileSize( compressedfilename, false ) > 0 )
+			return NETCHAN_CACHE_PRESENT;
+	}
+
+	compressed = LZSS_Compress( (byte *)buffer, filesize, &compressedSize );
+	if( compressed && compressedSize > 0 && compressedSize < filesize )
+	{
+		Con_DPrintf( "Prebuilt download cache %s (%s -> %s)\n", filename, Q_memprint( filesize ), Q_memprint( compressedSize ));
+		FS_WriteFile( compressedfilename, compressed, compressedSize );
+		free( compressed );
+		return NETCHAN_CACHE_BUILT;
+	}
+
+	if( compressed )
+		free( compressed );
+
+	return NETCHAN_CACHE_SKIPPED;
+}
+
+netchan_cache_result_t Netchan_PrebuildDownloadCache( const char *filename )
+{
+	byte *buffer;
+	fs_offset_t filesize;
+	fs_offset_t fileTime;
+	netchan_cache_result_t result;
+
+	if( !COM_CheckString( filename ) || filename[0] == '!' )
+		return NETCHAN_CACHE_SKIPPED;
+
+	fileTime = FS_FileTime( filename, false );
+	if( fileTime < 0 )
+	{
+		Con_Printf( S_WARN "Unable to stat %s for cache prebuild\n", filename );
+		return NETCHAN_CACHE_FAILED;
+	}
+
+	buffer = FS_LoadFile( filename, &filesize, false );
+	if( !buffer )
+	{
+		Con_Printf( S_WARN "Unable to load %s for cache prebuild\n", filename );
+		return NETCHAN_CACHE_FAILED;
+	}
+
+	result = Netchan_PrebuildDownloadCacheFromBuffer( filename, buffer, filesize, fileTime );
+	Mem_Free( buffer );
+	return result;
+}
+
 /*
 packet header ( size in bits )
 -------------
@@ -928,7 +1046,7 @@ Netchan_CreateFileFragments
 
 ==============================
 */
-int Netchan_CreateFileFragments( netchan_t *chan, const char *filename )
+netchan_file_result_t Netchan_CreateFileFragments( netchan_t *chan, const char *filename )
 {
 	int         chunksize;
 	int         send, pos;
@@ -947,28 +1065,36 @@ int Netchan_CreateFileFragments( netchan_t *chan, const char *filename )
 	uint        uCompressedSize = 0;
 	byte        *compressed = NULL;
 	byte        *uncompressed = NULL;
+	qboolean    allowLiveCompression;
 
 	// shouldn't be critical, but just in case
 	if( Q_strlen( filename ) > sizeof( buf->filename ) - 1 )
 	{
 		Con_Printf( S_WARN "Unable to transfer %s due to path length overflow\n", filename );
-		return 0;
+		return NETCHAN_FILE_FAILED;
 	}
 
 	if(( filesize = FS_FileSize( filename, false )) <= 0 )
 	{
 		Con_Printf( S_WARN "Unable to open %s for transfer\n", filename );
-		return 0;
+		return NETCHAN_FILE_FAILED;
 	}
 
 	originalSize = filesize;
 	chunksize = chan->pfnBlockSize( chan->client, FRAGSIZE_FRAG );
 
+	if( Netchan_SizeExceedsLimit( originalSize, sv_download_max_file_mb.value ))
+	{
+		Con_Printf( S_WARN "Refusing in-game download %s: file is %s, limit is %.1f MB\n",
+			filename, Q_memprint( originalSize ), sv_download_max_file_mb.value );
+		return NETCHAN_FILE_TOO_LARGE;
+	}
+
 	Q_snprintf( compressedfilename, sizeof( compressedfilename ), "%s.ztmp", filename );
 	compressedFileTime = FS_FileTime( compressedfilename, false );
 	fileTime = FS_FileTime( filename, false );
 
-	if( compressedFileTime >= fileTime )
+	if( sv_download_prefer_ztmp.value && compressedFileTime >= fileTime )
 	{
 		// if compressed file already created and newer than source
 		fs_offset_t compressedSize = FS_FileSize( compressedfilename, false );
@@ -980,39 +1106,62 @@ int Netchan_CreateFileFragments( netchan_t *chan, const char *filename )
 	}
 	else
 	{
-		uncompressed = FS_LoadFile( filename, &filesize, false );
-		if( chan->gs_netchan )
+		allowLiveCompression = sv_download_compress_max_mb.value > 0.0f
+			&& !Netchan_SizeExceedsLimit( originalSize, sv_download_compress_max_mb.value );
+		if( !allowLiveCompression )
 		{
-#if !XASH_DEDICATED
-			compressed = Mem_Malloc( net_mempool, filesize + 600 );
-			uCompressedSize = filesize + 600;
-			if( BZ2_bzBuffToBuffCompress( compressed, &uCompressedSize, uncompressed, filesize, 9, 0, 30 ) == BZ_OK && uCompressedSize < filesize )
-			{
-				Con_DPrintf( "compressed file %s (%s -> %s)\n", filename, Q_memprint( filesize ), Q_memprint( uCompressedSize ));
-				FS_WriteFile( compressedfilename, compressed, uCompressedSize );
-				filesize = uCompressedSize;
-				bCompressed = true;
-				compressor = "bz2";
-			}
-			Mem_Free( compressed );
-#else
-			Host_Error( "%s: BZ2 compression is not supported for server\n", __func__ );
-#endif
+			Con_Printf( S_WARN "Skipping live compression for %s: file is %s, live compression limit is %.1f MB\n",
+				filename, Q_memprint( originalSize ), sv_download_compress_max_mb.value );
 		}
 		else
 		{
-			compressed = LZSS_Compress( uncompressed, filesize, &uCompressedSize );
-			if( compressed && uCompressedSize > 0 && uCompressedSize < filesize )
+			uncompressed = FS_LoadFile( filename, &filesize, false );
+			if( !uncompressed )
 			{
-				Con_DPrintf( "compressed file %s (%s -> %s)\n", filename, Q_memprint( filesize ), Q_memprint( uCompressedSize ));
-				FS_WriteFile( compressedfilename, compressed, uCompressedSize );
-				filesize = uCompressedSize;
-				bCompressed = true;
-				compressor = "lzss";
-				free( compressed );
+				Con_Printf( S_WARN "Unable to load %s for transfer\n", filename );
+				return NETCHAN_FILE_FAILED;
 			}
+
+			if( chan->gs_netchan )
+			{
+#if !XASH_DEDICATED
+				compressed = Mem_Malloc( net_mempool, filesize + 600 );
+				uCompressedSize = filesize + 600;
+				if( BZ2_bzBuffToBuffCompress( compressed, &uCompressedSize, uncompressed, filesize, 9, 0, 30 ) == BZ_OK && uCompressedSize < filesize )
+				{
+					Con_DPrintf( "compressed file %s (%s -> %s)\n", filename, Q_memprint( filesize ), Q_memprint( uCompressedSize ));
+					FS_WriteFile( compressedfilename, compressed, uCompressedSize );
+					filesize = uCompressedSize;
+					bCompressed = true;
+					compressor = "bz2";
+				}
+				Mem_Free( compressed );
+#else
+				Host_Error( "%s: BZ2 compression is not supported for server\n", __func__ );
+#endif
+			}
+			else
+			{
+				compressed = LZSS_Compress( uncompressed, filesize, &uCompressedSize );
+				if( compressed && uCompressedSize > 0 && uCompressedSize < filesize )
+				{
+					Con_DPrintf( "compressed file %s (%s -> %s)\n", filename, Q_memprint( filesize ), Q_memprint( uCompressedSize ));
+					FS_WriteFile( compressedfilename, compressed, uCompressedSize );
+					filesize = uCompressedSize;
+					bCompressed = true;
+					compressor = "lzss";
+					free( compressed );
+				}
+			}
+			Mem_Free( uncompressed );
 		}
-		Mem_Free( uncompressed );
+	}
+
+	if( Netchan_SizeExceedsLimit( Netchan_FileQueueBytes( chan ) + filesize, sv_download_max_queue_mb.value ))
+	{
+		Con_Printf( S_WARN "Refusing in-game download %s: queued file data would exceed %.1f MB per-client limit\n",
+			filename, sv_download_max_queue_mb.value );
+		return NETCHAN_FILE_QUEUE_FULL;
 	}
 
 	wait = (fragbufwaiting_t *)Mem_Calloc( net_mempool, sizeof( fragbufwaiting_t ));
@@ -1072,7 +1221,7 @@ int Netchan_CreateFileFragments( netchan_t *chan, const char *filename )
 		p->next = wait;
 	}
 
-	return 1;
+	return NETCHAN_FILE_QUEUED;
 }
 
 /*
