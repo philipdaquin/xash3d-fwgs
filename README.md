@@ -7,6 +7,18 @@ Xash3D ([pronounced](https://ipa-reader.com/?text=ks%C9%91%CA%82) `[ksɑʂ]`) FW
 
 Xash3D FWGS is a heavily modified fork of an original [Xash3D Engine](https://www.moddb.com/engines/xash3d-engine) by Unkle Mike.
 
+This fork is focused on the Counter-Strike 1.6 client runtime. We use CSMOE and Source SDK code as references where they help with compatibility and API shape, but the CS16 client remains the runtime this project relies on.
+
+## Highlights
+* VGUI2 integration with client-side startup and draw integration.
+* Shared client-side rendering APIs for renderer integration.
+* Shared client-side texture and image APIs.
+* imagelib integration, including the CSMOE reference snapshot used for image handling work.
+* Hardened master listing and NAT discovery.
+* Hardened bad pointer handling when players disconnect or time out on the server.
+* Hardened download reconnect handling and server download behavior.
+* Fixed font and NanoGL-related rendering issues.
+
 ## Donate
 [![Donate to FWGS button](https://img.shields.io/badge/Donate_to_FWGS-%3C3-magenta)](Documentation/donate.md) \
 If you like Xash3D FWGS, consider supporting individual engine maintainers. By supporting us, you help to continue developing this game engine further. The sponsorship links are available in [documentation](Documentation/donate.md).
@@ -16,6 +28,8 @@ If you like Xash3D FWGS, consider supporting individual engine maintainers. By s
 * Crossplatform and modern compilers support: supports Windows, Linux, BSD & Android on x86 & ARM and [many more](Documentation/ports.md).
 * Better multiplayer: multiple master servers, headless dedicated server, voice chat, [GoldSrc protocol support](Documentation/goldsrc-protocol-support.md) and IPv6 support.
 * Multiple renderers support: OpenGL, GLESv1, GLESv2 and Software.
+* Source SDK references used for compatibility work and API alignment.
+* This fork depends on the CS16 client runtime to run.
 * Advanced virtual filesystem: `.pk3` and `.pk3dir` support, compatibility with GoldSrc FS module, fast case-insensitivity emulation for crossplatform.
 * Mobility API: better game integration on mobile devices (vibration, touch controls).
 * Different input methods: touch and gamepad in addition to mouse & keyboard.
